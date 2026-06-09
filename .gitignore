@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.vscode/
+.idea/
+*.log
+*.tmp
+.ipynb_checkpoints/
+
+# Data files (never commit)
+*.csv
+*.xlsx
+*.pkl
+*.npy
+
+# Generated outputs
+output/
+results/
+figures/
+tables/
