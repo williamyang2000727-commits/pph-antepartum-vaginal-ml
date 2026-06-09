@@ -53,7 +53,7 @@ All random states are fixed to `42`. The data partitioning, cross-validation, bo
 ## Installation
 
 ```bash
-git clone https://github.com/<USERNAME>/pph-antepartum-vaginal-ml.git
+git clone https://github.com/williamyang2000727-commits/pph-antepartum-vaginal-ml.git
 cd pph-antepartum-vaginal-ml
 python3 -m venv venv
 source venv/bin/activate
