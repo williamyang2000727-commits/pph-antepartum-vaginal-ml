@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
 """
-04_train_RF_SMOTEENN_Top30.py - Train the final RandomForest + SMOTEENN
-                                 model on the top 30 features.
+train_RF_SMOTEENN_Top30.py - 重新訓練 RandomForest + SMOTEENN (Top 30)
 
-Pipeline:
-  - KNN imputation (k=1)
-  - StandardScaler
-  - SMOTEENN resampling (in-fold for CV; on full train for final)
-  - RandomForest classifier
+基於 00_clean_pipeline_no_leakage.py 修改：
+- 改用 RandomForest (不是 LightGBM)
+- 改用 Top 30 features (不是 Top 25)
+- 改用 KNN k=1 (不是 k=5)
+- 保持所有其他參數不變 (random_state=42)
 
-All random states fixed to 42 for reproducibility.
+目標：復現 Final_Top30_RandomForest_SMOTEENN_info.json 的結果
+- TP=27, FP=41, FN=10, TN=76
+- Recall=0.7297, AUC=0.7169, MCC=0.3263
 """
 
-
-
+import os
 import pandas as pd
 import numpy as np
 from scipy import stats
 from sklearn.model_selection import train_test_split
+
+# 2026-07-23 路徑遷移:改用「腳本自身位置」推導,不再硬編碼舊倉庫 PPH_Prediction_Model-main。
+# BASE = PPH_joint_search_2026_06_05/ (本檔的上一層)。整包資料夾搬到哪都能跑。
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CSV_DIR = os.path.join(BASE, '02_experiment_csv')
+RESULTS_DIR = os.path.join(BASE, '01_KEY_RESULTS')
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import KNNImputer, SimpleImputer
@@ -26,7 +32,7 @@ from sklearn.metrics import (confusion_matrix, roc_curve, roc_auc_score,
                              precision_recall_curve, average_precision_score,
                              recall_score, precision_score, f1_score,
                              matthews_corrcoef, accuracy_score)
-from sklearn.ensemble import RandomForestClassifier  # ⭐ Use RandomForest
+from sklearn.ensemble import RandomForestClassifier  # ⭐ 改用 RandomForest
 from imblearn.combine import SMOTEENN
 import json
 import warnings
@@ -43,7 +49,7 @@ print("\n" + "=" * 80)
 print("Step 1: Load Original Data")
 print("=" * 80)
 
-all_features = pd.read_csv('/Users/yangyongcheng/Desktop/PPH_Prediction_Model-main/PPH_v2_corrected/corrected/_ORIGINAL_EXPERIMENTS_DO_NOT_MODIFY/02_experiment_csv/all_features.csv')
+all_features = pd.read_csv(os.path.join(CSV_DIR, 'all_features.csv'))
 print(f"Total samples: {len(all_features)}")
 print(f"Total features: {len(all_features.columns) - 2}")
 print(f"PPH+: {all_features['pph'].sum()} ({all_features['pph'].mean()*100:.1f}%)")
@@ -238,7 +244,7 @@ print("\n" + "=" * 80)
 print("Step 6: KNN Imputation (k=1) - Fit on Train, Transform on Test")
 print("=" * 80)
 
-# ⭐ Use k=1 (instead of k=5)
+# ⭐ 改用 k=1 (不是 k=5)
 imputer = KNNImputer(n_neighbors=1)
 X_train_imp = imputer.fit_transform(X_train_final)
 X_test_imp = imputer.transform(X_test_final)
@@ -269,13 +275,13 @@ X_train_res, y_train_res = smoteenn.fit_resample(X_train_scaled, y_train_final)
 print(f"  After SMOTEENN:  {len(y_train_res)} samples (PPH+: {sum(y_train_res)})")
 
 # =====================================================================
-# Step 9: Train RandomForest (⭐ instead of LightGBM)
+# Step 9: Train RandomForest (⭐ 不是 LightGBM)
 # =====================================================================
 print("\n" + "=" * 80)
 print("Step 9: Train RandomForest Classifier (⭐ not LightGBM)")
 print("=" * 80)
 
-# ⭐ Use RandomForest
+# ⭐ 改用 RandomForest
 model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
 model.fit(X_train_res, y_train_res)
 print("  ⭐ RandomForest training completed!")
@@ -346,7 +352,7 @@ checks = {
     "MCC": abs(mcc - target_mcc) < 0.001
 }
 
-print("\nVerification results:")
+print("\nVerification Results:")
 all_passed = True
 for metric, passed in checks.items():
     status = "✅ PASS" if passed else "❌ FAIL"
@@ -355,19 +361,19 @@ for metric, passed in checks.items():
         all_passed = False
 
 if all_passed:
-    print("\n🎉🎉🎉 ✅ ALL CHECKS PASSED! results match target JSON!")
+    print("\n🎉🎉🎉 ✅ ALL CHECKS PASSED! Results match target JSON!")
 else:
-    print("\nWARNING: Some metrics do not match target JSON")
+    print("\n⚠️ WARNING: Some metrics do not match target JSON")
     print("This may be due to different feature selection or random seeds")
 
 # =====================================================================
-# Save results
+# Save Results
 # =====================================================================
 print("\n" + "=" * 80)
-print("Saving results")
+print("Saving Results")
 print("=" * 80)
 
-output_dir = '/Users/yangyongcheng/Desktop/PPH_Prediction_Model-main/PPH_v2_corrected/corrected/data/'
+output_dir = RESULTS_DIR + os.sep  # 結果檔(test_set_y_*.npy 等)統一存 01_KEY_RESULTS/
 
 # Save predictions and probabilities
 np.save(output_dir + 'test_set_y_true.npy', y_test_final)

@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
 """
-Regenerate Main_Fig3_ROC.png - Top 5 pipelines by test composite
-from the joint search.
+重新生成 Fig3.png — Joint Search Top 5(by Test composite)
 
-Plotting style (mirrors the original):
-  - Winner (RF): red, solid line, linewidth 3.5
-  - #2-#5:      colored dashed lines, linewidth 2, alpha 0.7
-  - Diagonal:   gray, dotted, linewidth 1.5
-  - Font:       Arial, 9-11pt, no title (PLOS specification)
+1:1 沿用原版 regenerate_Fig3_correct_top5.py 的繪圖風格:
+  - 7.5 x 7.5 inch, 300 DPI, equal aspect
+  - 第 1 名 RF: 紅色 / 實線 / linewidth 3.5
+  - #2-#5: 彩色虛線 / linewidth 2 / alpha 0.7
+  - 對角線: 灰色 / 點線 ':' / linewidth 1.5
+  - Arial / fs=9-11pt / 無 title (PLOS 規範)
+
+只改:Top 5 model 配置(從原 5,265 ranking 改成 joint search 2,646 by test composite)
+
+Joint Search Top 5 (by Test composite 0.4*MCC + 0.3*AUC + 0.3*Recall):
+  #1: KNN_k1  + RandomForest + SMOTEENN            + Top30  (Test comp 0.5645, AUC 0.717)
+  #2: KNN_k3  + DecisionTree + SMOTEENN            + Top30  (Test comp 0.5602, AUC 0.686)
+  #3: KNN_k1  + ExtraTrees   + SMOTEENN            + Top30  (Test comp 0.5557, AUC 0.713)
+  #4: KNN_k1  + SVM_RBF      + SMOTEENN            + Top30  (Test comp 0.5527, AUC 0.639)
+  #5: KNN_k7  + ExtraTrees   + RandomUndersampling + Top20  (Test comp 0.5490, AUC 0.688)
 """
 
-
-
+import os
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -30,14 +38,16 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # =====================================================================
-# Path
+# 路徑
 # =====================================================================
-BASE = '/Users/yangyongcheng/Desktop/PPH_joint_search_2026_06_05'
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CSV_DIR = f'{BASE}/02_experiment_csv'
-OUT_PATH = f'{BASE}/06_figures/Main_Fig3_ROC.png'
+# 2026-07-25 修:原本輸出 6/11 改名前的舊檔名 Main_Fig3_ROC.png,重跑不會更新投稿用的
+# Fig3.png,還會在 06_figures 內多出一個並存的舊名檔案造成混淆。
+OUT_PATH = f'{BASE}/06_figures/Fig3.png'
 
 # =====================================================================
-# 1. Load data & split(1:1 reuse protocol)
+# 1. 載入數據 & 分割(1:1 沿用原 protocol)
 # =====================================================================
 all_features = pd.read_csv(f'{CSV_DIR}/all_features.csv')
 feature_cols = [c for c in all_features.columns if c not in ['PID', 'pph']]
@@ -51,17 +61,17 @@ print(f"Train: {len(y_train)} (PPH+ {sum(y_train)})")
 print(f"Test:  {len(y_test)} (PPH+ {sum(y_test)})")
 
 # =====================================================================
-# 2. Bootstrap LASSO ranking -> feature subsets
+# 2. Bootstrap LASSO 排名 → feature subsets
 # =====================================================================
 freq_df = pd.read_csv(f'{CSV_DIR}/bootstrap_selection_frequency_clean.csv')
 top30_features = freq_df.head(30)['feature'].tolist()
 top20_features = freq_df.head(20)['feature'].tolist()
 
 # =====================================================================
-# 3. Joint Search Top 5 configuration(by test composite)
+# 3. Joint Search Top 5 配置(by Test composite)
 # =====================================================================
 model_configs = [
-    {  # #1 champion — redsolid line(original versionsamesamestyle)
+    {  # #1 冠軍 — 紅色實線(原版同樣風格)
         'name': 'RF + SMOTEENN + Top30 + KNN k=1',
         'features': top30_features,
         'imputer_k': 1,
@@ -119,7 +129,7 @@ model_configs = [
 ]
 
 # =====================================================================
-# 4. For each model: select features -> impute -> scale -> resample -> train -> ROC
+# 4. 每個 model:選特徵 → impute → scale → resample → train → ROC
 # =====================================================================
 roc_results = []
 
@@ -133,7 +143,7 @@ for cfg in model_configs:
     y_tr = y_train.values
     y_te = y_test.values
 
-    # KNN imputation (k change)
+    # KNN imputation (k 變化)
     imputer = KNNImputer(n_neighbors=cfg['imputer_k'])
     X_tr_imp = imputer.fit_transform(X_tr)
     X_te_imp = imputer.transform(X_te)
@@ -174,45 +184,45 @@ for cfg in model_configs:
     })
 
 # =====================================================================
-# 5. verify AUC(matching joint search test eval csv)
+# 5. 驗證 AUC(對照 joint search test eval csv)
 # =====================================================================
 expected = [0.717, 0.686, 0.713, 0.639, 0.688]
 print("\n" + "=" * 60)
-print("AUC verify:")
+print("AUC 驗證:")
 for i, r in enumerate(roc_results):
-    match = "✅" if abs(r['auc'] - expected[i]) < 0.005 else "WARNING:"
+    match = "✅" if abs(r['auc'] - expected[i]) < 0.005 else "⚠️"
     print(f"  #{i+1} {r['name'][:50]:<50s} AUC={r['auc']:.4f}  (expect {expected[i]:.3f}) [{match}]")
 
 # =====================================================================
-# 6. plot — 1:1 reuse the original version PLOS spec
+# 6. 繪圖 — 1:1 沿用原版 PLOS 規格
 # =====================================================================
 fig, ax = plt.subplots(figsize=(7.5, 7.5), dpi=300)
 
-# Sort by AUC (high to low) for legend ordering
+# 排序 by AUC(高→低),用於 legend 排序
 sorted_results = sorted(roc_results, key=lambda r: r['auc'], reverse=True)
 
-# Draw the 4 non-RF models first(dashed line),lower AUC drawn first, higher AUC overlaid on top
+# 先畫 4 個非 RF model(虛線),低 AUC 先畫,高 AUC 蓋上去
 non_rf = [r for r in sorted_results if not r['name'].startswith('RF +')]
 for r in reversed(non_rf):
     ax.plot(r['fpr'], r['tpr'],
             color=r['color'], linewidth=r['linewidth'],
             linestyle=r['linestyle'], alpha=r['alpha'])
 
-# RF drawn last (solid line, on top layer)
+# RF 最後畫(實線,蓋最上層)
 rf = sorted_results[0] if sorted_results[0]['name'].startswith('RF +') else \
      next(r for r in roc_results if r['name'].startswith('RF +'))
 ax.plot(rf['fpr'], rf['tpr'],
         color=rf['color'], linewidth=rf['linewidth'],
         linestyle=rf['linestyle'], alpha=rf['alpha'])
 
-# Random classifier diagonalline
+# Random classifier 對角線
 ax.plot([0, 1], [0, 1], color='gray', linewidth=1.5, linestyle=':', alpha=0.7)
 
-# Manual legend handles(sorted by AUC, high to low)
+# 手動 legend handles(按 AUC 高→低排)
 from matplotlib.lines import Line2D
-# re-sort(put RF one)
+# 重新 sort(放 RF 第一)
 legend_order = [r for r in sorted_results]
-# Ensure RF is first
+# 確保 RF 在第一
 legend_order = [rf] + [r for r in sorted_results if r['name'] != rf['name']]
 
 legend_handles = []
@@ -230,7 +240,7 @@ legend_handles.append(
            label='Random Classifier')
 )
 
-# axis configuration(reused from the original version)
+# 軸設定(沿用原版)
 ax.set_xlim([0.0, 1.0])
 ax.set_ylim([0.0, 1.0])
 ax.set_xlabel('False Positive Rate (1 - Specificity)', fontsize=11)
@@ -243,12 +253,12 @@ plt.tight_layout()
 plt.savefig(OUT_PATH, dpi=300, bbox_inches='tight', facecolor='white')
 plt.close()
 
-# RGB flatten + speccheck
+# RGB flatten + 規格檢查
 from PIL import Image
 img = Image.open(OUT_PATH).convert('RGB')
 img.save(OUT_PATH, dpi=(300, 300))
 w, h = img.width, img.height
 print(f"\nFinal: {w}x{h} px")
-print(f"Width <=2250: {'✅' if w <= 2250 else '❌'}")
-print(f"Height <=2625: {'✅' if h <= 2625 else '❌'}")
+print(f"Width ≤2250: {'✅' if w <= 2250 else '❌'}")
+print(f"Height ≤2625: {'✅' if h <= 2625 else '❌'}")
 print(f"Saved: {OUT_PATH}")

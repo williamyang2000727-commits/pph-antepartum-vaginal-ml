@@ -1,14 +1,7 @@
-#!/usr/bin/env python3
 """
-08_test_eval_top10.py - Sanity-check test-set evaluation across the
-                        top 10 pipelines from the joint search.
-
-Each pipeline follows the same fit/transform protocol as the original
-experiment (Imputation and Imbalance applied on the full training set,
-not inside CV).
+Test set evaluation of Top 10 from joint search + 原冠軍
+(事後 sanity check,不用於 model selection)
 """
-
-
 import pandas as pd
 import numpy as np
 import warnings
@@ -21,11 +14,28 @@ from sklearn.metrics import (recall_score, precision_score, f1_score,
                              accuracy_score)
 
 import sys
-sys.path.insert(0, '/Users/yangyongcheng/Desktop/PPH_Prediction_Model-main/PPH_v2_corrected/corrected/joint_search_2026_06_05/')
-from joint_search import get_imputer, get_model, get_imbalance, FEATURE_SUBSETS
+import os
 
-# Load data
-csv_path = '/Users/yangyongcheng/Desktop/PPH_Prediction_Model-main/PPH_v2_corrected/corrected/_ORIGINAL_EXPERIMENTS_DO_NOT_MODIFY/02_experiment_csv/all_features.csv'
+# 2026-07-23 路徑遷移:改用「腳本自身位置」推導,不再硬編碼舊倉庫 PPH_Prediction_Model-main。
+# BASE = PPH_joint_search_2026_06_05/ (本檔的上一層)。整包資料夾搬到哪都能跑。
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_DIR = os.path.join(BASE, '02_experiment_csv')
+
+# 原 `from joint_search import ...` 依賴的 joint_search.py 已更名為 06_joint_search.py,
+# 檔名以數字開頭無法直接 import,改用 importlib 由路徑載入(等價於原 import)。
+import importlib.util
+_spec = importlib.util.spec_from_file_location(
+    'joint_search', os.path.join(SCRIPT_DIR, '06_joint_search.py'))
+joint_search = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(joint_search)
+get_imputer, get_model, get_imbalance, FEATURE_SUBSETS = (joint_search.get_imputer,
+                                                          joint_search.get_model,
+                                                          joint_search.get_imbalance,
+                                                          joint_search.FEATURE_SUBSETS)
+
+# 載入 data
+csv_path = os.path.join(CSV_DIR, 'all_features.csv')
 all_features = pd.read_csv(csv_path)
 feature_cols = [c for c in all_features.columns if c not in ['PID', 'pph']]
 X = all_features[feature_cols]
@@ -33,7 +43,7 @@ y = all_features['pph']
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 y_test_arr = y_test.values
 
-freq_path = '/Users/yangyongcheng/Desktop/PPH_Prediction_Model-main/PPH_v2_corrected/corrected/_ORIGINAL_EXPERIMENTS_DO_NOT_MODIFY/02_experiment_csv/bootstrap_selection_frequency_clean.csv'
+freq_path = os.path.join(CSV_DIR, 'bootstrap_selection_frequency_clean.csv')
 freq_df = pd.read_csv(freq_path)
 
 feature_subsets = {}
@@ -44,10 +54,10 @@ for name, kind, val in FEATURE_SUBSETS:
         feats = freq_df[freq_df['selection_frequency'] >= val]['feature'].tolist()
     feature_subsets[name] = feats
 
-# Load ranked result
-ranked = pd.read_csv('/Users/yangyongcheng/Desktop/PPH_Prediction_Model-main/PPH_v2_corrected/corrected/joint_search_2026_06_05/joint_search_ranked.csv')
+# 載入 ranked 結果
+ranked = pd.read_csv(os.path.join(CSV_DIR, 'joint_search_ranked.csv'))
 
-# take Top 10 plus original champion
+# 取 Top 10 + 原冠軍
 top10 = ranked.head(10).copy()
 champ = ranked[(ranked['imputer']=='KNN_k1') &
                (ranked['model']=='RandomForest') &
@@ -55,7 +65,7 @@ champ = ranked[(ranked['imputer']=='KNN_k1') &
                (ranked['feature_subset']=='Top30')].copy()
 
 eval_list = pd.concat([top10, champ]).drop_duplicates(subset=['imputer','model','imbalance','feature_subset'])
-print(f'toevaluate {len(eval_list)} pipelines on the test set')
+print(f'要評估 {len(eval_list)} 個 pipeline 在 test set 上的表現')
 print('=' * 100)
 
 results = []
@@ -70,7 +80,7 @@ for idx, row in eval_list.iterrows():
     X_te_sel = X_test[feats].values
     y_tr_arr = y_train.values
 
-    # Imputation (matches the original experiment:fit_transform on the full training set)
+    # Imputation (跟原實驗一致:對 train 全體 fit_transform)
     imputer = get_imputer(imp_name)
     X_tr_imp = imputer.fit_transform(X_tr_sel)
     X_te_imp = imputer.transform(X_te_sel)
@@ -80,7 +90,7 @@ for idx, row in eval_list.iterrows():
     X_tr_sc = scaler.fit_transform(X_tr_imp)
     X_te_sc = scaler.transform(X_te_imp)
 
-    # Imbalance(on the full training set,because this is the final test,instead of CV)
+    # Imbalance(對 train 全體,因為這次是 final test,不是 CV)
     imb = get_imbalance(imb_name)
     class_weight = None
     if imb is None:
@@ -147,21 +157,21 @@ for idx, row in eval_list.iterrows():
             'tp': int(tp), 'fp': int(fp), 'fn': int(fn), 'tn': int(tn),
         })
 
-        marker = '🎯 original champion' if (mod_name=='RandomForest' and imb_name=='SMOTEENN' and fs_name=='Top30' and imp_name=='KNN_k1') else f'#{int(idx)+1}'
+        marker = '🎯 原冠軍' if (mod_name=='RandomForest' and imb_name=='SMOTEENN' and fs_name=='Top30' and imp_name=='KNN_k1') else f'#{int(idx)+1}'
         print(f'{marker:12s} {imp_name:8s} | {mod_name:18s} | {imb_name:22s} | {fs_name:12s} | '
               f'Test recall={recall:.3f} AUC={auc:.3f} MCC={mcc:.3f} F1={f1:.3f} Spec={spec:.3f}')
     except Exception as e:
         print(f'  {imp_name} | {mod_name} | {imb_name} | {fs_name}: ERROR {e}')
 
-# Save
+# 存
 df = pd.DataFrame(results)
-out = '/Users/yangyongcheng/Desktop/PPH_Prediction_Model-main/PPH_v2_corrected/corrected/joint_search_2026_06_05/top10_test_eval.csv'
+out = os.path.join(CSV_DIR, 'top10_test_eval.csv')
 df.to_csv(out, index=False)
-print(f'\nSaved: {out}')
+print(f'\n已存: {out}')
 
-# Compare CV vs test rank changes
+# 比較 CV vs Test 的排名變化
 print('\n' + '=' * 100)
-print('rankingchange(CV composite vs Test composite):')
+print('排名變化(CV composite vs Test composite):')
 print('=' * 100)
 df['test_composite'] = (
     df['test_recall'].rank(pct=True) +

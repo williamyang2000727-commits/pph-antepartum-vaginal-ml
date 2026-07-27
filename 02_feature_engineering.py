@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
 """
-02_feature_engineering.py - Antepartum feature engineering.
+02_feature_engineering.py - 特徵工程（包含分娩當天）
 
-Key principle:
-  All features use data with measurement_date < delivery_day + 1
-  (i.e. including delivery day itself, up to 23:59), because some
-  antepartum diagnoses (e.g. preeclampsia) are sometimes recorded
-  on the delivery day. This is still leakage-free: the PPH outcome
-  itself is recorded post-delivery and is never included.
+關鍵原則：
+- 所有特徵使用 分娩當天 23:59 之前 的資料（包含分娩當天）
+- 這是因為許多產前診斷（如子癲前症）會在分娩當天記錄
+- 仍能避免資料洩漏，因為不包含 PPH 結果本身
 
-Literature support:
-  - Preeclampsia is a known PPH risk factor (Yunas et al. 2025 Lancet)
-  - Chronic hypertension is also associated with PPH risk
+文獻支持：
+- 子癲前症是 PPH 的已知風險因子 (The Lancet 2025, OR 1.5-2)
+- 慢性高血壓也與 PPH 風險相關
 
-Output:
-  - all_features.csv: 304 candidate features
-  - feature_statistics.csv: per-feature stats and chi-square / t-test results
+輸出：
+- all_features.csv：所有候選特徵
+- feature_statistics.csv：特徵統計與卡方檢定結果
 """
-
-
 
 import pandas as pd
 import numpy as np
@@ -27,92 +23,92 @@ import warnings
 warnings.filterwarnings('ignore')
 
 print("=" * 70)
-print("[Step 2] Feature engineering (including delivery day)")
+print("【步驟 2】特徵工程（包含分娩當天）")
 print("=" * 70)
 
 # =====================================================================
-# Loading data
+# 讀取資料
 # =====================================================================
-print("\nLoading data...")
+print("\n讀取資料...")
 labels = pd.read_csv('vaginal_delivery_labels.csv')
-lab = pd.read_csv('lab_values.csv')
-diag = pd.read_csv('diagnoses.csv')
+lab = pd.read_csv('2.F2025627_產科檢驗數值(2023-2024).csv')
+diag = pd.read_csv('3.F2025627_疾病診斷(2023-2024).csv')
 
-# Convert date formats
+# 轉換日期格式
 labels['time_cutoff'] = pd.to_datetime(labels['time_cutoff'])
 lab['measurement_date'] = pd.to_datetime(lab['measurement_date'])
 diag['condition_start_date'] = pd.to_datetime(diag['condition_start_date'])
 
-# cleannameswhitespace
+# 清理診斷名稱空格
 diag['condition_clean'] = diag['condition_concept_name'].str.strip()
 
-print(f"labeldata: {len(labels)} records")
-print(f"lab testdata: {len(lab)} records")
-print(f"diagnosisdata: {len(diag)} records")
+print(f"標籤資料: {len(labels)} 筆")
+print(f"檢驗資料: {len(lab)} 筆")
+print(f"診斷資料: {len(diag)} 筆")
 
-# Keep only vaginal-delivery patients
+# 只保留自然產病患的資料
 valid_pids = set(labels['PID'])
 lab = lab[lab['PID'].isin(valid_pids)].copy()
 diag = diag[diag['PID'].isin(valid_pids)].copy()
 
-print(f"Filtered lab data: {len(lab)} records")
-print(f"Filtered diagnosis data: {len(diag)} records")
+print(f"篩選後檢驗資料: {len(lab)} 筆")
+print(f"篩選後診斷資料: {len(diag)} 筆")
 
 # =====================================================================
-# Build cutoff time lookup table
+# 建立時間截止點對照表
 # =====================================================================
 cutoff_dict = labels.set_index('PID')['time_cutoff'].to_dict()
 
 # =====================================================================
-# Step 1: baseline features
+# 一、基本特徵
 # =====================================================================
 print("\n" + "=" * 70)
-print("【Step 1: baseline features】")
+print("【一、基本特徵】")
 print("=" * 70)
 
 features = labels[['PID', 'age', 'pph']].copy()
 features['is_advanced_maternal_age'] = (features['age'] >= 35).astype(int)
 
-print(f"age: average {features['age'].mean():.1f} yr")
-print(f"is_advanced_maternal_age: {features['is_advanced_maternal_age'].sum()}  ({features['is_advanced_maternal_age'].mean()*100:.1f}%)")
+print(f"age: 平均 {features['age'].mean():.1f} 歲")
+print(f"is_advanced_maternal_age: {features['is_advanced_maternal_age'].sum()} 人 ({features['is_advanced_maternal_age'].mean()*100:.1f}%)")
 
 # =====================================================================
-# Step 2: lab-value features(including delivery day)
+# 二、檢驗值特徵（包含分娩當天）
 # =====================================================================
 print("\n" + "=" * 70)
-print("【Step 2: lab-value features】(including delivery day)")
+print("【二、檢驗值特徵】（包含分娩當天）")
 print("=" * 70)
 
-# For each lab record, merge the patient cutoff time
+# 為每筆檢驗資料加上該病患的時間截止點
 lab['time_cutoff'] = lab['PID'].map(cutoff_dict)
 
-# Time filter: including delivery day的data(time_cutoff isdelivery day 00:00)
-# Condition: measurement_date < time_cutoff + 1天 = including delivery day
+# 時間過濾：包含分娩當天的資料（time_cutoff 是分娩當天 00:00）
+# 條件: measurement_date < time_cutoff + 1天 = 包含分娩當天
 lab_before = lab[lab['measurement_date'] < (lab['time_cutoff'] + pd.Timedelta(days=1))].copy()
-print(f"Time filterbefore: {len(lab)} records")
-print(f"Time filterafter: {len(lab_before)} records(including delivery day)")
+print(f"時間過濾前: {len(lab)} 筆")
+print(f"時間過濾後: {len(lab_before)} 筆（包含分娩當天）")
 
-# Coverage rate per lab test item
+# 檢查各檢驗項目的覆蓋率
 lab_items = lab_before.groupby('concept_name')['PID'].nunique()
 total_patients = len(labels)
 coverage = (lab_items / total_patients * 100).sort_values(ascending=False)
 
-print(f"\nLab item coverage rate (>=30% required for inclusion):")
+print(f"\n檢驗項目覆蓋率（≥30% 才納入）:")
 valid_lab_items = []
 for item, cov in coverage.items():
     if cov >= 30:
         valid_lab_items.append(item)
         print(f"  {item}: {cov:.1f}%")
 
-print(f"\n符合Condition的lab testitem目: {len(valid_lab_items)} ")
+print(f"\n符合條件的檢驗項目: {len(valid_lab_items)} 個")
 
-# buildlab valuesfeatures
+# 建立檢驗值特徵
 lab_features = {}
 
 for item in valid_lab_items:
     item_data = lab_before[lab_before['concept_name'] == item]
 
-    # Compute per-patient statistics
+    # 計算每位病患的統計量
     for pid in labels['PID']:
         if pid not in lab_features:
             lab_features[pid] = {}
@@ -141,27 +137,27 @@ lab_df.index.name = 'PID'
 lab_df = lab_df.reset_index()
 
 features = features.merge(lab_df, on='PID', how='left')
-print(f"Number of lab-value features: {len(lab_df.columns) - 1}")
+print(f"檢驗值特徵數: {len(lab_df.columns) - 1}")
 
 # =====================================================================
-# Step 3: diagnosis features(including delivery day)
+# 三、診斷特徵（包含分娩當天）
 # =====================================================================
 print("\n" + "=" * 70)
-print("【Step 3: diagnosis features】(including delivery day)")
+print("【三、診斷特徵】（包含分娩當天）")
 print("=" * 70)
 
-# For each diagnosis record, merge the patient cutoff time
+# 為每筆診斷資料加上該病患的時間截止點
 diag['time_cutoff'] = diag['PID'].map(cutoff_dict)
 
-# Time filter: including delivery day的data
-# Condition: condition_start_date < time_cutoff + 1天 = including delivery day
+# 時間過濾：包含分娩當天的資料
+# 條件: condition_start_date < time_cutoff + 1天 = 包含分娩當天
 diag_before = diag[diag['condition_start_date'] < (diag['time_cutoff'] + pd.Timedelta(days=1))].copy()
-print(f"Time filterbefore: {len(diag)} records")
-print(f"Time filterafter: {len(diag_before)} records(including delivery day)")
+print(f"時間過濾前: {len(diag)} 筆")
+print(f"時間過濾後: {len(diag_before)} 筆（包含分娩當天）")
 
-# ----- 定義diagnosissplitgroup -----
+# ----- 定義診斷分組 -----
 
-# preeclampsia(PDF 定義的 11 )
+# 子癲前症（PDF 定義的 11 個）
 preeclampsia_keywords = [
     'Unspecified pre-eclampsia, second trimester',
     'Unspecified pre-eclampsia, third trimester',
@@ -176,7 +172,7 @@ preeclampsia_keywords = [
     'Severe pre-eclampsia, third trimester'
 ]
 
-# its他Reference風險因子關鍵詞
+# 其他文獻風險因子關鍵詞
 diagnosis_groups = {
     'has_preeclampsia': preeclampsia_keywords,
     'has_anemia': ['anemia', 'anaemia'],
@@ -206,9 +202,9 @@ diagnosis_groups = {
     'has_induced_labor': ['induction', 'induced labor', 'induced labour'],
 }
 
-# builddiagnosisfeatures
+# 建立診斷特徵
 def check_diagnosis(pid, keywords, diag_data):
-    """check病患is否has特定diagnosis(part匹match)"""
+    """檢查病患是否有特定診斷（部分匹配）"""
     patient_diag = diag_data[diag_data['PID'] == pid]['condition_clean'].str.lower()
     for kw in keywords:
         if isinstance(kw, str):
@@ -218,27 +214,27 @@ def check_diagnosis(pid, keywords, diag_data):
     return 0
 
 def check_diagnosis_exact(pid, keywords, diag_data):
-    """check病患is否has特定diagnosis(completely匹match)"""
+    """檢查病患是否有特定診斷（完全匹配）"""
     patient_diag = diag_data[diag_data['PID'] == pid]['condition_clean']
     return 1 if patient_diag.isin(keywords).any() else 0
 
-print("\nbuilddiagnosisfeatures...")
+print("\n建立診斷特徵...")
 diag_features = {pid: {} for pid in labels['PID']}
 
-# has_preeclampsia usecompletely匹match(PDF 定義)
+# has_preeclampsia 用完全匹配（PDF 定義）
 for pid in labels['PID']:
     diag_features[pid]['has_preeclampsia'] = check_diagnosis_exact(pid, preeclampsia_keywords, diag_before)
 
-# its他diagnosisusepart匹match
+# 其他診斷用部分匹配
 for feature_name, keywords in diagnosis_groups.items():
     if feature_name == 'has_preeclampsia':
-        continue  # process
+        continue  # 已處理
     for pid in labels['PID']:
         diag_features[pid][feature_name] = check_diagnosis(pid, keywords, diag_before)
 
-    # displayProgress
+    # 顯示進度
     count = sum(diag_features[pid][feature_name] for pid in labels['PID'])
-    print(f"  {feature_name}: {count}  ({count/len(labels)*100:.1f}%)")
+    print(f"  {feature_name}: {count} 人 ({count/len(labels)*100:.1f}%)")
 
 diag_df = pd.DataFrame.from_dict(diag_features, orient='index')
 diag_df.index.name = 'PID'
@@ -247,13 +243,13 @@ diag_df = diag_df.reset_index()
 features = features.merge(diag_df, on='PID', how='left')
 
 # =====================================================================
-# four, 卡方檢定篩選
+# 四、卡方檢定篩選
 # =====================================================================
 print("\n" + "=" * 70)
-print("【four, 卡方檢定篩選】")
+print("【四、卡方檢定篩選】")
 print("=" * 70)
 
-# 對binaryfeaturesdo卡方檢定
+# 對二元特徵做卡方檢定
 binary_features = ['is_advanced_maternal_age'] + list(diagnosis_groups.keys())
 chi2_results = []
 
@@ -261,14 +257,14 @@ for feat in binary_features:
     if feat not in features.columns:
         continue
 
-    # buildcolumn聯Table
+    # 建立列聯表
     contingency = pd.crosstab(features[feat], features['pph'])
 
     # 卡方檢定
     if contingency.shape == (2, 2):
         chi2, p_value, dof, expected = stats.chi2_contingency(contingency)
 
-        # Computeeachgroup比例
+        # 計算各組比例
         pph_pos = features[features['pph'] == 1]
         pph_neg = features[features['pph'] == 0]
 
@@ -287,9 +283,9 @@ for feat in binary_features:
 
 chi2_df = pd.DataFrame(chi2_results).sort_values('p_value')
 
-print("\nbinaryfeatures卡方檢定result(p < 0.05 for顯著):")
+print("\n二元特徵卡方檢定結果（p < 0.05 為顯著）:")
 print("-" * 80)
-print(f"{'features':<30} {'p值':<12} {'PPH+比例':<12} {'PPH-比例':<12} {'顯著':<8}")
+print(f"{'特徵':<30} {'p值':<12} {'PPH+比例':<12} {'PPH-比例':<12} {'顯著':<8}")
 print("-" * 80)
 
 significant_binary = []
@@ -299,9 +295,9 @@ for _, row in chi2_df.iterrows():
     if row['p_value'] < 0.05:
         significant_binary.append(row['feature'])
 
-print(f"\n顯著的binaryfeatures: {len(significant_binary)} ")
+print(f"\n顯著的二元特徵: {len(significant_binary)} 個")
 
-# 對continuousfeaturesdo t-test
+# 對連續特徵做 t-test
 continuous_features = ['age'] + [col for col in features.columns if col.endswith(('_last', '_mean', '_min', '_max', '_count', '_std'))]
 ttest_results = []
 
@@ -326,12 +322,12 @@ for feat in continuous_features:
 
 ttest_df = pd.DataFrame(ttest_results).sort_values('p_value')
 
-# firstcollect所has顯著features(p < 0.05)
+# 先收集所有顯著特徵（p < 0.05）
 significant_continuous = ttest_df[ttest_df['p_value'] < 0.05]['feature'].tolist()
 
-print(f"\ncontinuousfeatures t-test result(共 {len(significant_continuous)} 顯著, displaybefore 20 ):")
+print(f"\n連續特徵 t-test 結果（共 {len(significant_continuous)} 個顯著，顯示前 20 個）:")
 print("-" * 90)
-print(f"{'features':<35} {'p值':<12} {'PPH+average':<15} {'PPH-average':<15} {'顯著':<8}")
+print(f"{'特徵':<35} {'p值':<12} {'PPH+平均':<15} {'PPH-平均':<15} {'顯著':<8}")
 print("-" * 90)
 
 for _, row in ttest_df.head(20).iterrows():
@@ -339,27 +335,27 @@ for _, row in ttest_df.head(20).iterrows():
     print(f"{row['feature']:<35} {row['p_value']:<12.4f} {row['pph_positive_mean']:<15.2f} {row['pph_negative_mean']:<15.2f} {sig_mark:<8}")
 
 if len(significant_continuous) > 20:
-    print(f"... andits他 {len(significant_continuous) - 20} 顯著features")
+    print(f"... 及其他 {len(significant_continuous) - 20} 個顯著特徵")
 
-print(f"\n顯著的continuousfeatures: {len(significant_continuous)} ")
+print(f"\n顯著的連續特徵: {len(significant_continuous)} 個")
 
 # =====================================================================
-# five, Saveresult
+# 五、儲存結果
 # =====================================================================
 print("\n" + "=" * 70)
-print("【five, Saveresult】")
+print("【五、儲存結果】")
 print("=" * 70)
 
-# Saveall features
+# 儲存所有特徵
 features.to_csv('all_features.csv', index=False)
-print(f"Save: all_features.csv ({len(features)} records, {len(features.columns)} column)")
+print(f"已儲存: all_features.csv ({len(features)} 筆, {len(features.columns)} 欄)")
 
-# Save統countresult
+# 儲存統計結果
 chi2_df.to_csv('chi2_test_results.csv', index=False)
 ttest_df.to_csv('ttest_results.csv', index=False)
-print(f"Save: chi2_test_results.csv, ttest_results.csv")
+print(f"已儲存: chi2_test_results.csv, ttest_results.csv")
 
-# Save顯著features list
+# 儲存顯著特徵清單
 significant_features = {
     'binary_features': significant_binary,
     'continuous_features': significant_continuous,
@@ -369,20 +365,20 @@ significant_features = {
 import json
 with open('significant_features.json', 'w') as f:
     json.dump(significant_features, f, indent=2, ensure_ascii=False)
-print(f"Save: significant_features.json")
+print(f"已儲存: significant_features.json")
 
 # =====================================================================
-# six, 摘to
+# 六、摘要
 # =====================================================================
 print("\n" + "=" * 70)
-print("【摘to】")
+print("【摘要】")
 print("=" * 70)
-print(f"Totalsamples數: {len(features)}")
+print(f"總樣本數: {len(features)}")
 print(f"PPH+: {features['pph'].sum()} ({features['pph'].mean()*100:.1f}%)")
 print(f"PPH-: {len(features) - features['pph'].sum()} ({(1-features['pph'].mean())*100:.1f}%)")
-print(f"\nTotalfeatures數: {len(features.columns) - 2} (扣除 PID, pph)")
-print(f"顯著binaryfeatures: {len(significant_binary)} ")
-print(f"顯著continuousfeatures: {len(significant_continuous)} ")
-print(f"Total顯著features: {len(significant_binary) + len(significant_continuous)} ")
+print(f"\n總特徵數: {len(features.columns) - 2} (扣除 PID, pph)")
+print(f"顯著二元特徵: {len(significant_binary)} 個")
+print(f"顯著連續特徵: {len(significant_continuous)} 個")
+print(f"總顯著特徵: {len(significant_binary) + len(significant_continuous)} 個")
 
-print("\nDone!")
+print("\n完成！")

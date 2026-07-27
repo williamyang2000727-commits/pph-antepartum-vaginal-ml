@@ -1,14 +1,9 @@
-#!/usr/bin/env python3
 """
-07_full_test_eval.py - Evaluate all 2,646 unique pipelines from the
-                        joint search on the independent test set.
+INTERNAL ONLY — 全 2,646 個 pipeline 在 test set 上的 evaluation
+用對的算式: 0.4 × MCC + 0.3 × AUC + 0.3 × Recall
 
-For each pipeline, the model is refit on the full training set (n=615)
-and predictions are evaluated on the held-out test set (n=154).
-Composite score: 0.4 x MCC + 0.3 x AUC + 0.3 x Recall.
+⚠️ 結果是否寫進論文由用戶決定
 """
-
-
 import pandas as pd
 import numpy as np
 import warnings
@@ -24,12 +19,29 @@ from sklearn.metrics import (recall_score, precision_score, f1_score,
                              roc_auc_score, matthews_corrcoef, confusion_matrix,
                              accuracy_score)
 
-sys.path.insert(0, '/Users/yangyongcheng/Desktop/PPH_Prediction_Model-main/PPH_v2_corrected/corrected/joint_search_2026_06_05/')
-from joint_search import (get_imputer, get_model, get_imbalance,
-                          IMPUTERS, MODELS, IMBALANCES, FEATURE_SUBSETS)
+# 2026-07-23 路徑遷移:改用「腳本自身位置」推導,不再硬編碼舊倉庫 PPH_Prediction_Model-main。
+# BASE = PPH_joint_search_2026_06_05/ (本檔的上一層)。整包資料夾搬到哪都能跑。
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_DIR = os.path.join(BASE, '02_experiment_csv')
 
-# Load data
-csv_path = '/Users/yangyongcheng/Desktop/PPH_Prediction_Model-main/PPH_v2_corrected/corrected/_ORIGINAL_EXPERIMENTS_DO_NOT_MODIFY/02_experiment_csv/all_features.csv'
+# 原 `from joint_search import ...` 依賴的 joint_search.py 已更名為 06_joint_search.py,
+# 檔名以數字開頭無法直接 import,改用 importlib 由路徑載入(等價於原 import)。
+import importlib.util
+_spec = importlib.util.spec_from_file_location(
+    'joint_search', os.path.join(SCRIPT_DIR, '06_joint_search.py'))
+joint_search = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(joint_search)
+get_imputer, get_model, get_imbalance = (joint_search.get_imputer,
+                                         joint_search.get_model,
+                                         joint_search.get_imbalance)
+IMPUTERS, MODELS, IMBALANCES, FEATURE_SUBSETS = (joint_search.IMPUTERS,
+                                                 joint_search.MODELS,
+                                                 joint_search.IMBALANCES,
+                                                 joint_search.FEATURE_SUBSETS)
+
+# 載入 data
+csv_path = os.path.join(CSV_DIR, 'all_features.csv')
 all_features = pd.read_csv(csv_path)
 feature_cols = [c for c in all_features.columns if c not in ['PID', 'pph']]
 X = all_features[feature_cols]
@@ -38,7 +50,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 y_test_arr = y_test.values
 y_train_arr = y_train.values
 
-freq_path = '/Users/yangyongcheng/Desktop/PPH_Prediction_Model-main/PPH_v2_corrected/corrected/_ORIGINAL_EXPERIMENTS_DO_NOT_MODIFY/02_experiment_csv/bootstrap_selection_frequency_clean.csv'
+freq_path = os.path.join(CSV_DIR, 'bootstrap_selection_frequency_clean.csv')
 freq_df = pd.read_csv(freq_path)
 
 feature_subsets = {}
@@ -49,7 +61,7 @@ for name, kind, val in FEATURE_SUBSETS:
         feats = freq_df[freq_df['selection_frequency'] >= val]['feature'].tolist()
     feature_subsets[name] = feats
 
-# Build all 2,646 combinations
+# 構造所有 2,646 個組合
 combos = []
 for imp in IMPUTERS:
     for mod in MODELS:
@@ -57,16 +69,16 @@ for imp in IMPUTERS:
             for fs_name, _, _ in FEATURE_SUBSETS:
                 combos.append((imp, mod, imb, fs_name))
 
-print(f'Total combinations: {len(combos)}')
-print(f'Test set: {len(y_test_arr)} samples, PPH+: {y_test_arr.sum()}')
+print(f'總組合: {len(combos)}')
+print(f'Test set: {len(y_test_arr)} 樣本, PPH+: {y_test_arr.sum()}')
 print('=' * 80)
 
 results = []
-output_dir = '/Users/yangyongcheng/Desktop/PPH_Prediction_Model-main/PPH_v2_corrected/corrected/joint_search_2026_06_05/'
+output_dir = CSV_DIR  # 產出 full_test_eval_results.csv / ranked.csv 存 02_experiment_csv/
 csv_out = os.path.join(output_dir, 'full_test_eval_results.csv')
-log_out = os.path.join(output_dir, 'full_test_eval_progress.log')
+log_out = os.path.join(BASE, '04_logs', 'full_test_eval_progress.log')  # log 統一進 04_logs/
 
-# Clear old log
+# 清舊 log
 if os.path.exists(log_out):
     os.remove(log_out)
 
@@ -77,7 +89,7 @@ for i, (imp_name, mod_name, imb_name, fs_name) in enumerate(combos):
         X_tr_sel = X_train[feats].values
         X_te_sel = X_test[feats].values
 
-        # Imputation: fit_transform on full train (same as the original experiment)
+        # Imputation: 對 train 全體 fit_transform(同原實驗)
         imputer = get_imputer(imp_name)
         X_tr_imp = imputer.fit_transform(X_tr_sel)
         X_te_imp = imputer.transform(X_te_sel)
@@ -87,7 +99,7 @@ for i, (imp_name, mod_name, imb_name, fs_name) in enumerate(combos):
         X_tr_sc = scaler.fit_transform(X_tr_imp)
         X_te_sc = scaler.transform(X_te_imp)
 
-        # Imbalance (on full train)
+        # Imbalance(對 train 全體)
         imb = get_imbalance(imb_name)
         class_weight = None
         if imb is None:
@@ -146,7 +158,7 @@ for i, (imp_name, mod_name, imb_name, fs_name) in enumerate(combos):
             'feature_subset': fs_name, 'error': str(e),
         })
 
-    # Progress
+    # 進度
     if (i + 1) % 50 == 0 or i == len(combos) - 1:
         el = time.time() - start
         eta = (el / (i + 1)) * (len(combos) - i - 1) / 60
@@ -154,14 +166,14 @@ for i, (imp_name, mod_name, imb_name, fs_name) in enumerate(combos):
         print(msg)
         with open(log_out, 'a') as f:
             f.write(msg + '\n')
-        # write csv
+        # 寫 csv
         pd.DataFrame(results).to_csv(csv_out, index=False)
 
-# Cleanup
+# 收尾
 df = pd.DataFrame(results)
 df.to_csv(csv_out, index=False)
 
-# Compute the true composite score
+# 計算真 composite
 df_valid = df[df['test_recall'].notna() & df['test_auc'].notna()].copy()
 df_valid['test_composite'] = (
     0.4 * df_valid['test_mcc'] +
@@ -175,17 +187,17 @@ df_valid.to_csv(ranked_out, index=False)
 
 total_min = (time.time() - start) / 60
 print('\n' + '=' * 80)
-print(f'✅ Done!Totalelapsed {total_min:.1f} min')
-print(f'  Valid results: {len(df_valid)} / {len(combos)}')
+print(f'✅ 完成!總耗時 {total_min:.1f} 分鐘')
+print(f'  有效結果: {len(df_valid)} / {len(combos)}')
 print('=' * 80)
 print('\nTop 10 by test composite:')
 print(df_valid.head(10)[['imputer','model','imbalance','feature_subset',
                           'test_recall','test_auc','test_mcc','test_composite']].to_string(index=True))
 
-# original championranking
+# 原冠軍排名
 champ = df_valid[(df_valid['imputer']=='KNN_k1') & (df_valid['model']=='RandomForest') &
                   (df_valid['imbalance']=='SMOTEENN') & (df_valid['feature_subset']=='Top30')]
 if len(champ) > 0:
     rank = champ.index[0] + 1
-    print(f'\n🎯 original champion RF+SMOTEENN+Top30+KNN k=1 across all {len(df_valid)}  ranking in the test eval: {rank}')
+    print(f'\n🎯 原冠軍 RF+SMOTEENN+Top30+KNN k=1 在全 {len(df_valid)} 個 test eval 中排名: {rank}')
     print(champ[['test_recall','test_auc','test_mcc','test_composite']].to_string())

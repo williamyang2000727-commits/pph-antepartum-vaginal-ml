@@ -1,35 +1,33 @@
-#!/usr/bin/env python3
 """
-06_joint_search.py - Joint search across four pipeline dimensions.
+Reduced Joint Search Experiment (2026-06-05)
+=============================================
+目的:驗證原大搜索冠軍 RF+SMOTEENN+Top30+KNN k=1 在「imputation × algorithm × imbalance × feature」
+四維度聯合搜索下仍是最佳,擋 reviewer 對 sequential selection bias 的攻擊。
 
-Design:
-  - StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
-  - train_test_split(test_size=0.2, random_state=42, stratify=y)
-  - Imputation: fit_transform on full training set (same as the
-    original protocol, not inside CV)
-  - Imbalance handling: resampling applied inside each CV training
-    fold only (validation fold untouched)
+設計:1:1 對齊原 run_experiment.py 的所有細節
+- StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
+- train_test_split(test_size=0.2, random_state=42, stratify=y)
+- Imputation: 在 train 全體 fit_transform(同原實驗,非 CV 內)
+- StandardScaler: fit on train
+- Imbalance: 在 CV training fold 內 resample(同原實驗)
+- Composite score: (recall.rank_pct + auc.rank_pct + mcc.rank_pct) / 3
 
-Search grid:
-  - Imputation:        7 methods  (KNN k=1/3/5/7/10, MICE, Median)
-  - Algorithms:        9 families
-                       (LogisticRegression, DecisionTree, RandomForest,
-                        ExtraTrees, XGBoost, LightGBM, SVM_RBF, KNN,
-                        GaussianNB)
-  - Imbalance:         7 strategies
-                       (SMOTE, ADASYN, RandomUndersampling, SMOTEENN,
-                        SMOTETomek, ClassWeight_Balanced, None)
-  - Feature subsets:   6 configurations
-                       (Top8, Top15, Top20, Top25, Top30, Threshold45)
-
-Total: 7 x 9 x 7 x 6 = 2,646 unique pipelines x 10 folds = 26,460 fits
+代表性挑選:
+- imputation: 7 種 (KNN k=1/3/5/7/10 + MICE + Median)
+- algorithm:  9 種(各家族代表 + GaussianNB 弱基線)
+- imbalance:  7 種(各家族代表 + None 對照)
+- feature:    6 種(top_8/15/20/25/30 + threshold_45)
+總:7 × 9 × 7 × 6 = 2,646 unique pipelines × 10-fold CV = 26,460 fits
 """
-
-
 
 import sys
 import os
 import argparse
+
+# 2026-07-23 路徑遷移:改用「腳本自身位置」推導,不再硬編碼舊倉庫 PPH_Prediction_Model-main。
+# BASE = PPH_joint_search_2026_06_05/ (本檔的上一層)。整包資料夾搬到哪都能跑。
+BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CSV_DIR = os.path.join(BASE, '02_experiment_csv')
 import time
 import json
 import warnings
@@ -63,10 +61,10 @@ from imblearn.combine import SMOTEENN, SMOTETomek
 
 
 # =====================================================================
-# 1. Imputation dict(7 種)
+# 1. Imputation 字典(7 種)
 # =====================================================================
 def get_imputer(name):
-    """iter傳 fresh imputer instance(eachtimes fit 都usenew的,to avoid狀態污染)"""
+    """回傳 fresh imputer instance(每次 fit 都用新的,避免狀態污染)"""
     if name == 'KNN_k1':
         return KNNImputer(n_neighbors=1)
     elif name == 'KNN_k3':
@@ -88,10 +86,10 @@ IMPUTERS = ['KNN_k1', 'KNN_k3', 'KNN_k5', 'KNN_k7', 'KNN_k10', 'MICE', 'Median']
 
 
 # =====================================================================
-# 2. Algorithm dict(9 種,family representatives + GaussianNB weak baseline)
+# 2. Algorithm 字典(9 種,各家族代表 + GaussianNB 弱基線)
 # =====================================================================
 def get_model(name):
-    """iter傳 fresh model instance"""
+    """回傳 fresh model instance"""
     if name == 'LogisticRegression':
         return LogisticRegression(max_iter=2000, random_state=42)
     elif name == 'DecisionTree':
@@ -119,10 +117,10 @@ MODELS = ['LogisticRegression', 'DecisionTree', 'RandomForest', 'ExtraTrees',
 
 
 # =====================================================================
-# 3. Imbalance dict(7 種,family representatives + None control)
+# 3. Imbalance 字典(7 種,各家族代表 + None 對照)
 # =====================================================================
 def get_imbalance(name):
-    """iter傳 imbalance method instance or None / 'balanced'"""
+    """回傳 imbalance method instance 或 None / 'balanced'"""
     if name == 'SMOTE':
         return SMOTE(random_state=42)
     elif name == 'ADASYN':
@@ -134,7 +132,7 @@ def get_imbalance(name):
     elif name == 'SMOTETomek':
         return SMOTETomek(random_state=42)
     elif name == 'ClassWeight_Balanced':
-        return 'balanced'  # 特殊process
+        return 'balanced'  # 特殊處理
     elif name == 'None':
         return None
     else:
@@ -158,17 +156,17 @@ FEATURE_SUBSETS = [
 
 
 # =====================================================================
-# 主toexperimentfunction
+# 主要實驗函數
 # =====================================================================
 def run_one_pipeline(X_train_raw, y_train, imputer_name, model_name, imbalance_name,
                      feature_list, kfold):
-    """Runone (imputation, algorithm, imbalance, feature) group合,iter傳 10-fold CV average指mark"""
+    """跑一個 (imputation, algorithm, imbalance, feature) 組合,回傳 10-fold CV 平均指標"""
     try:
         # 1. Subset features
         X_train_sel = X_train_raw[feature_list].values
         y_train_arr = y_train.values
 
-        # 2. Imputation(1:1 aligned with the originalexperiment:fit_transform on the full training set)
+        # 2. Imputation(1:1 對齊原實驗:對 train 全體 fit_transform)
         imputer = get_imputer(imputer_name)
         X_train_imp = imputer.fit_transform(X_train_sel)
 
@@ -176,7 +174,7 @@ def run_one_pipeline(X_train_raw, y_train, imputer_name, model_name, imbalance_n
         scaler = StandardScaler()
         X_train_scaled = scaler.fit_transform(X_train_imp)
 
-        # 4. 10-fold CV(imbalance 在 fold inside resample)
+        # 4. 10-fold CV(imbalance 在 fold 內 resample)
         cv_recalls, cv_precisions, cv_f1s, cv_aucs, cv_mccs = [], [], [], [], []
 
         for train_idx, val_idx in kfold.split(X_train_scaled, y_train_arr):
@@ -238,7 +236,7 @@ def run_one_pipeline(X_train_raw, y_train, imputer_name, model_name, imbalance_n
             'imputer': imputer_name,
             'model': model_name,
             'imbalance': imbalance_name,
-            'feature_subset': '',  # after填
+            'feature_subset': '',  # 後填
             'n_features': len(feature_list),
             'cv_recall_mean': float(np.mean(cv_recalls)),
             'cv_recall_std': float(np.std(cv_recalls)),
@@ -259,34 +257,34 @@ def run_one_pipeline(X_train_raw, y_train, imputer_name, model_name, imbalance_n
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dry_run', action='store_true', help='onlyRun 8 group合校when')
+    parser.add_argument('--dry_run', action='store_true', help='只跑 8 組合校時')
     parser.add_argument('--output_dir', default='.')
-    parser.add_argument('--start_idx', type=int, default=0, help='from N group合開始(續Runuse)')
+    parser.add_argument('--start_idx', type=int, default=0, help='從第 N 個組合開始(續跑用)')
     args = parser.parse_args()
 
     print('=' * 80)
-    print('  PPH Reduced Joint Search experiment (2026-06-05)')
+    print('  PPH Reduced Joint Search Experiment (2026-06-05)')
     print('=' * 80)
 
-    # 1. Load data
-    csv_path = '/Users/yangyongcheng/Desktop/PPH_Prediction_Model-main/PPH_v2_corrected/corrected/_ORIGINAL_EXPERIMENTS_DO_NOT_MODIFY/02_experiment_csv/all_features.csv'
+    # 1. 載入資料
+    csv_path = os.path.join(CSV_DIR, 'all_features.csv')
     all_features = pd.read_csv(csv_path)
     feature_cols = [c for c in all_features.columns if c not in ['PID', 'pph']]
     X = all_features[feature_cols]
     y = all_features['pph']
 
-    # 1:1 aligned with the original split
+    # 1:1 對齊原 split
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
-    print(f'  Train: {len(y_train)} samples, PPH+: {y_train.sum()}')
-    print(f'  Test : {len(y_test)} samples, PPH+: {y_test.sum()} (本experimentnotuse,onlyuse train do CV)')
+    print(f'  Train: {len(y_train)} 樣本, PPH+: {y_train.sum()}')
+    print(f'  Test : {len(y_test)} 樣本, PPH+: {y_test.sum()} (本實驗不用,只用 train 做 CV)')
 
-    # 2. Load LASSO ranking
-    freq_path = '/Users/yangyongcheng/Desktop/PPH_Prediction_Model-main/PPH_v2_corrected/corrected/_ORIGINAL_EXPERIMENTS_DO_NOT_MODIFY/02_experiment_csv/bootstrap_selection_frequency_clean.csv'
+    # 2. 載入 LASSO ranking
+    freq_path = os.path.join(CSV_DIR, 'bootstrap_selection_frequency_clean.csv')
     freq_df = pd.read_csv(freq_path)
 
-    # 3. Build feature subsets
+    # 3. 構造 feature subsets
     feature_subsets = {}
     for name, kind, val in FEATURE_SUBSETS:
         if kind == 'top':
@@ -296,10 +294,10 @@ def main():
         feature_subsets[name] = feats
         print(f'  Feature subset {name}: {len(feats)} features')
 
-    # 4. KFold(1:1 aligned with the originalexperiment)
+    # 4. KFold(1:1 對齊原實驗)
     kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
 
-    # 5. Build所hasgroup合
+    # 5. 構造所有組合
     combos = []
     for imp in IMPUTERS:
         for mod in MODELS:
@@ -307,29 +305,29 @@ def main():
                 for fs_name, _, _ in FEATURE_SUBSETS:
                     combos.append((imp, mod, imb, fs_name))
 
-    print(f'\n  Total combinations數: {len(combos)} ({len(IMPUTERS)}x{len(MODELS)}x{len(IMBALANCES)}x{len(FEATURE_SUBSETS)})')
+    print(f'\n  總組合數: {len(combos)} ({len(IMPUTERS)}×{len(MODELS)}×{len(IMBALANCES)}×{len(FEATURE_SUBSETS)})')
 
     if args.dry_run:
         combos = combos[:8]
-        print(f'  WARNING: DRY RUN: onlyRunbefore 8 校when')
+        print(f'  ⚠️ DRY RUN: 只跑前 8 個校時')
 
-    # 6. Run!
+    # 6. 跑!
     results = []
     os.makedirs(args.output_dir, exist_ok=True)
     log_file = os.path.join(args.output_dir, 'progress.log')
     csv_file = os.path.join(args.output_dir, 'joint_search_results.csv')
 
-    print(f'\n  Output CSV: {csv_file}')
-    print(f'  Progress log: {log_file}')
+    print(f'\n  輸出 CSV: {csv_file}')
+    print(f'  進度 log: {log_file}')
     print('=' * 80)
 
     start_time = time.time()
 
-    # e.g.果is續Run,firstLoadoldresult
+    # 如果是續跑,先載入舊結果
     if args.start_idx > 0 and os.path.exists(csv_file):
         old_df = pd.read_csv(csv_file)
         results = old_df.to_dict('records')
-        print(f'  from idx {args.start_idx} 續Run,has {len(results)} recordsoldresult')
+        print(f'  從 idx {args.start_idx} 續跑,已有 {len(results)} 筆舊結果')
 
     for i, (imp, mod, imb, fs_name) in enumerate(combos):
         if i < args.start_idx:
@@ -343,11 +341,11 @@ def main():
             results.append(r)
         elapsed_combo = time.time() - t0
 
-        # each 10 writeonetimes csv(防middle斷)
+        # 每 10 個寫一次 csv(防中斷)
         if (i + 1) % 10 == 0 or i == len(combos) - 1:
             pd.DataFrame(results).to_csv(csv_file, index=False)
 
-        # Progress
+        # 進度
         total_elapsed = time.time() - start_time
         avg_per_combo = total_elapsed / (i + 1 - args.start_idx) if (i + 1 - args.start_idx) > 0 else 0
         remaining_combos = len(combos) - (i + 1)
@@ -358,11 +356,11 @@ def main():
         with open(log_file, 'a') as f:
             f.write(msg + '\n')
 
-    # 7. Cleanup
+    # 7. 收尾
     df = pd.DataFrame(results)
     df.to_csv(csv_file, index=False)
 
-    # add composite score(same as the original experiment)
+    # 加 composite score(同原實驗)
     df_valid = df[df['cv_recall_mean'].notna()].copy()
     df_valid['composite_score'] = (
         df_valid['cv_recall_mean'].rank(pct=True) +
@@ -373,20 +371,20 @@ def main():
     df_valid.to_csv(os.path.join(args.output_dir, 'joint_search_ranked.csv'), index=False)
 
     total_min = (time.time() - start_time) / 60
-    print(f'\n  ✅ Done!Totalelapsed {total_min:.1f} min')
+    print(f'\n  ✅ 完成!總耗時 {total_min:.1f} 分鐘')
     print(f'  Top 10 composite score:')
     print(df_valid.head(10)[['imputer', 'model', 'imbalance', 'feature_subset',
                               'cv_recall_mean', 'cv_auc_mean', 'cv_mcc_mean',
                               'composite_score']].to_string(index=False))
 
-    # 找original championranking
+    # 找原冠軍排名
     champ = df_valid[(df_valid['imputer'] == 'KNN_k1') &
                      (df_valid['model'] == 'RandomForest') &
                      (df_valid['imbalance'] == 'SMOTEENN') &
                      (df_valid['feature_subset'] == 'Top30')]
     if len(champ) > 0:
         rank = champ.index[0] + 1
-        print(f'\n  🎯 original champion RF+SMOTEENN+Top30+KNN k=1 ranking: {rank}/{len(df_valid)}')
+        print(f'\n  🎯 原冠軍 RF+SMOTEENN+Top30+KNN k=1 排名: {rank}/{len(df_valid)}')
         print(champ.iloc[0][['cv_recall_mean', 'cv_auc_mean', 'cv_mcc_mean', 'composite_score']])
 
 
