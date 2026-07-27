@@ -118,19 +118,15 @@ begins.
 |---|---|
 | `03_feature_selection.py` | An earlier stability-selection variant. It applies a fixed 0.6 selection-frequency threshold, stratified bootstrap resampling, `class_weight='balanced'`, `C = [0.01, 0.1, 0.5, 1.0]`, and the whole cohort with no train/test split. **It does not produce the published 30 features.** Those come from `04_train_RF_SMOTEENN_Top30.py`, which uses unstratified resampling, no class weighting, `C = [0.01, 0.1, 1.0, 10.0]`, and the 615 training cases only, then ranks features by selection frequency and takes the top N. Re-running both variants reproduces the published selection counts exactly (35 of 35) for the `04` procedure and not at all (0 of 35) for this one. Retained for provenance; do not use it to reproduce the published feature set |
 
-### Figure generation
+### Not included
 
-| Script | Output |
-|---|---|
-| `regenerate_Fig3_ROC_jointsearch.py` | `06_figures/Fig3.png` — receiver operating characteristic curves of the five best pipelines. Reloads the feature matrix and the selection-frequency ranking, then rebuilds each of the five pipelines end to end (imputation, standardization, resampling, model fit) and recomputes its curve |
-
-The remaining figure and table scripts are not included, because they only draw
-diagrams or format the results into Word tables and compute nothing: the
-schematic in Fig 2, and the table layouts for Table 3 and S5 Table. The same
-applies to the scripts for the bootstrap confidence intervals, the calibration
-curve, the decision curve analysis and the Shapley additive explanations plots,
-which sit in a separate analysis directory. All of them are available from the
-authors on request.
+This repository holds the cohort-construction, feature-engineering, model-search
+and evaluation code — that is, everything that produces a reported number. The
+figure and table scripts live in a separate analysis directory and are not
+included here: some only draw schematics or format results into Word tables, and
+the rest cover the bootstrap confidence intervals, the calibration curve, the
+decision curve analysis and the Shapley additive explanations plots. All of them
+are available from the authors on request.
 
 ## Reproducibility
 
