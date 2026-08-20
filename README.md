@@ -23,21 +23,21 @@ the pipeline cannot be executed end-to-end from this repository alone.
 
 | Configuration | Performance on the independent test set (n = 154) |
 |---|---|
-| **RandomForest + SMOTEENN + Top 30 features + KNN k=1 imputation** | Sensitivity **0.7297** / AUC **0.7169** / MCC **0.3263** / Brier **0.2192** |
-| Confusion matrix | TP 27 / FP 41 / FN 10 / TN 76 |
-| Composite score | **0.5645** — ranked **1 / 2,646** unique pipelines |
+| **XGBoost + SMOTEENN + Top 30 features + KNN k=7 imputation** | Sensitivity **0.7838** / AUC **0.7404** / MCC **0.3876** / Brier **0.2418** |
+| Confusion matrix | TP 29 / FP 39 / FN 8 / TN 78 |
+| Composite score | **0.6123** — ranked **1 / 2,646** unique pipelines |
 
 Composite score = `0.4 × MCC + 0.3 × AUC + 0.3 × sensitivity`, computed on the
-independent test set. The same pipeline ranked **92 / 2,646** on the
+independent test set. The same pipeline ranked **522 / 2,646** (top 19.7%) on the
 cross-validation composite, which played no part in its selection.
 
 Because the final model was selected by its test-set composite score, the
 test-set metrics are an **optimistic bound**, not an unbiased estimate of
 generalization. The manuscript reports this explicitly and quantifies it: the
-winning pipeline's test-minus-cross-validation composite gap is +0.1149 against
-a mean of +0.0069 across all 2,646 pipelines (16.6×, the 95th percentile), and
+winning pipeline's test-minus-cross-validation composite gap is +0.2066 against
+a mean of +0.0033 across all 2,646 pipelines (62.9×, the highest percentile), and
 cross-validation AUC correlates only weakly with test AUC (Spearman
-ρ = 0.170). The conservative lower bound is the cross-validation AUC of 0.6210.
+ρ = 0.276). The conservative lower bound is the cross-validation AUC of 0.6266.
 
 ## Data availability
 
@@ -98,19 +98,32 @@ top of each script:
 
 | Script | Purpose |
 |---|---|
-| `04_train_RF_SMOTEENN_Top30.py` | **The canonical feature-selection and training script.** Stratified 80/20 split, then train-only chi-square and t-test filtering, train-only Bootstrap LASSO stability selection (100 resamples × 4 regularization parameters = 400 fits), KNN k=1 imputation, standardization, SMOTEENN, RandomForest. Checks its own output against the reported metrics |
+| `04_train_RF_SMOTEENN_Top30.py` | **The canonical feature-selection and training script.** Stratified 80/20 split, then train-only chi-square and t-test filtering, train-only Bootstrap LASSO stability selection (100 resamples × 4 regularization parameters = 400 fits), KNN k=1 imputation, standardization, SMOTEENN, RandomForest. Retained because it is the canonical source of the Top 30 feature set and of `bootstrap_selection_frequency_clean.csv`; its own self-check still targets the original RandomForest baseline, which is **not** the final model reported in the manuscript |
 | `06_joint_search.py` | Joint search over 7 × 9 × 7 × 6 = **2,646 unique pipelines** by 10-fold stratified cross-validation (**26,460 fits**) |
 | `07_full_test_eval.py` | Retrain all 2,646 pipelines on the full training set and evaluate each on the independent test set |
-| `05_final_model_evaluation.py` | Retrain the final model and write the confusion matrix, receiver operating characteristic curve, mean-decrease-in-impurity importances and a four-panel summary figure |
+| `05_final_model_evaluation.py` | Retrain the **RandomForest baseline** (Top 30 + SMOTEENN, the configuration this script was written for) and write its confusion matrix, receiver operating characteristic curve, mean-decrease-in-impurity importances and a four-panel summary figure. Kept for provenance; the model reported in the manuscript is extreme gradient boosting, produced by `06`/`07` |
 | `08_test_eval_top10.py` | Cross-check the ten best cross-validation pipelines on the test set |
 
-Imputation and standardization are fitted once on the full training set
-(n = 615), **outside** the cross-validation loop; class-imbalance resampling is
-the step confined to each training fold, with the validation fold left
-untouched. Feature ranking is likewise computed on the training set only and
-loaded outside the loop. The code is the authority on this: in
-`06_joint_search.py` the imputer and scaler are fitted before the fold loop
-begins.
+Inside the cross-validation loop, imputation, standardization and
+class-imbalance resampling are **all fitted separately within each training
+fold** and then applied to that fold's validation data, which is never used to
+estimate any of them. The code is the authority on this: in `06_joint_search.py`
+the imputer and the scaler are constructed inside the `for train_idx, val_idx`
+loop.
+
+> **Corrected on 2026-08-19.** Earlier versions fitted the imputer and the
+> scaler **once on the full training set before the fold split**, so every
+> validation fold contributed to the imputation and scaling parameters. That is
+> cross-validation-level data leakage, it made the cross-validation figures
+> optimistic, and it contradicted the fit-on-train principle this study cites in
+> its own Discussion. The experiment was rerun after the fix and every number in
+> the manuscript comes from the rerun. This README described the pre-fix
+> behaviour until 2026-08-20.
+
+Two things remain outside the loop, by design and stated here for transparency:
+the feature ranking, which is computed on the training set only and loaded once
+(so folds do not re-select features), and the independent test-set evaluation,
+which fits on the full training set of 615 and transforms the 154 test cases.
 
 ### Not used for the published results
 
@@ -132,26 +145,35 @@ are available from the authors on request.
 
 Every random state is fixed to `42` — data partitioning, cross-validation,
 bootstrap resampling and class-imbalance routines all use the same seed. Given
-`all_features.csv`, `04_train_RF_SMOTEENN_Top30.py` reproduces the reported
-confusion matrix (TP 27 / FP 41 / FN 10 / TN 76) and the 400-fit selection
-counts exactly; the script asserts this itself, to a tolerance of 0.001.
+`all_features.csv`, `04_train_RF_SMOTEENN_Top30.py` reproduces the 400-fit
+selection counts exactly. Note that the confusion matrix this script asserts
+against (TP 27 / FP 41 / FN 10 / TN 76, to a tolerance of 0.001) belongs to the
+original RandomForest baseline it was written to reproduce, **not** to the final
+model reported in the manuscript, whose confusion matrix is TP 29 / FP 39 /
+FN 8 / TN 78.
 
 Two caveats worth knowing before re-deriving anything:
 
-1. **Tied selection counts.** Nine pairs of features share an identical
-   selection count, and the default pandas sort is not stable, so regenerating
-   the ranking table from scratch can swap tied features. The Top 30 boundary is
-   unaffected (30th = 156 selections, 31st = 143), as are the Top 8, Top 20 and
-   Top 25 boundaries — but the **Top 15 boundary is a tie at 212 selections**, so
-   that subset can differ by one feature between regenerations.
+1. **Tied selection counts.** Five groups of features share an identical
+   selection count — ranks 3–4 (275), 18–19 (187), 21–22 (180), 30–31 (142) and
+   33–35 (115) — and the default pandas sort is not stable, so regenerating the
+   ranking table from scratch can swap tied features. The Top 8, Top 15, Top 20
+   and Top 25 boundaries fall clear of every tie. The **Top 30 boundary does sit
+   on a tie**: the 30th and 31st features (measurement count of estimated
+   glomerular filtration rate and measurement count of creatinine) are both
+   selected 142 times. This changes nothing, for a structural reason: estimated
+   glomerular filtration rate is derived from creatinine by the MDRD formula, so
+   the two are always ordered together and their measurement counts are identical
+   for all 769 deliveries (Pearson r = 1.000000, maximum absolute difference 0).
+   Substituting one for the other and retraining reproduces the reported metrics
+   and confusion matrix exactly.
 
 2. **The stored ranking table.** Scripts `05` through `08` read a stored
-   selection-frequency table, `bootstrap_selection_frequency_clean.csv`. No
-   script in this repository writes that filename: `04` computes the ranking in
-   memory and uses it without saving, and `03` writes a differently named file
-   from a different variant of the procedure. To regenerate the table, run the
-   Stage 1 and Stage 2 sections of `04_train_RF_SMOTEENN_Top30.py` and export
-   its frequency DataFrame.
+   selection-frequency table, `bootstrap_selection_frequency_clean.csv`. This is
+   written by `04_train_RF_SMOTEENN_Top30.py`, which computes the ranking and
+   exports it directly, so the file can never drift from the procedure that
+   produced it. Script `03` writes a differently named file from a different
+   variant of the procedure and is not used by the final model.
 
 ## Installation
 
@@ -162,6 +184,35 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+### Running the pipeline
+
+The raw hospital records cannot be shared (see **Data availability**), so the
+pipeline cannot be executed end-to-end from this repository alone. If you supply
+your own data in the same shape, note that the scripts use **two different path
+conventions**, a legacy of the directory they were developed in:
+
+| Stage | Working directory | Reads | Writes |
+|---|---|---|---|
+| `01` `02` `03` | the directory holding the data files | plain filenames in the current directory | plain filenames in the current directory |
+| `04` `05` `06` `07` `08` | anywhere | `<base>/02_experiment_csv/` | `<base>/02_experiment_csv/`, `<base>/01_KEY_RESULTS/`, `<base>/04_logs/` |
+
+`<base>` is resolved by `_resolve_base()`: it walks up from the script looking
+for a directory that contains `02_experiment_csv`, and falls back to the
+script's own directory. So placing your data in
+`pph-antepartum-vaginal-ml/02_experiment_csv/` and running the scripts from the
+repository root works; the output directories are created automatically.
+
+Because of the split convention, `02` writes `all_features.csv` into the working
+directory while `04` reads it from `02_experiment_csv/`. Move or symlink the file
+between those two stages.
+
+> **Corrected on 2026-08-20.** `04` through `08` previously derived `<base>` as
+> "two directories above the script", which is correct only in the original
+> project layout, where the scripts sit in a subdirectory. In this repository the
+> scripts sit at the root, so that expression resolved to the directory
+> *containing* the clone and every one of those five scripts failed on a fresh
+> checkout.
 
 The experiments were run on **Python 3.13.5**. `requirements.txt` pins the
 versions reported in the manuscript for the packages that affect numerical

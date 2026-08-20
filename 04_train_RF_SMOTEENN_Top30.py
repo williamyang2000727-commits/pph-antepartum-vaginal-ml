@@ -21,9 +21,36 @@ from sklearn.model_selection import train_test_split
 
 # 2026-07-23 路徑遷移:改用「腳本自身位置」推導,不再硬編碼舊倉庫 PPH_Prediction_Model-main。
 # BASE = PPH_joint_search_2026_06_05/ (本檔的上一層)。整包資料夾搬到哪都能跑。
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+def _resolve_base(script):
+    """找出資料根目錄：從腳本所在位置往上找含 `02_experiment_csv` 的那一層。
+
+    🚨 2026-08-20 修：原本寫死成「腳本往上兩層」
+       （`os.path.dirname(os.path.dirname(os.path.abspath(__file__)))`）。
+       這個假設只在本機專案成立 —— 腳本放在 `<專案>/03_scripts_ORIGINAL_DO_NOT_MODIFY/`，
+       往上兩層剛好是專案根。但**公開倉庫的腳本就放在倉庫根目錄**，
+       往上兩層會跑到倉庫外面：實測解析到 `~/Desktop`，
+       於是 clone 下來的人一執行 04／05／07／08 就去找不存在的
+       `<倉庫上上層>/02_experiment_csv/` 而崩潰，錯誤訊息還指向倉庫外的路徑。
+       改成往上搜尋含 `02_experiment_csv` 的那一層；找不到就退回腳本自己的目錄，
+       這樣錯誤訊息至少指在倉庫內。
+       ✅ 已實測：在本機專案的解析結果與舊寫法**完全相同**（五支逐一比對）。
+    """
+    d = os.path.dirname(os.path.abspath(script))
+    probe = d
+    for _ in range(3):                      # 腳本自身 → 上一層 → 上上層
+        if os.path.isdir(os.path.join(probe, '02_experiment_csv')):
+            return probe
+        parent = os.path.dirname(probe)
+        if parent == probe:
+            break
+        probe = parent
+    return d
+
+
+BASE = _resolve_base(__file__)
 CSV_DIR = os.path.join(BASE, '02_experiment_csv')
 RESULTS_DIR = os.path.join(BASE, '01_KEY_RESULTS')
+os.makedirs(RESULTS_DIR, exist_ok=True)   # 2026-08-20：倉庫裡沒有這個目錄，不建會直接 FileNotFoundError
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.impute import KNNImputer, SimpleImputer
@@ -213,6 +240,13 @@ freq_df = pd.DataFrame([
     }
     for feat, count in selection_counts.items()
 ]).sort_values('selection_frequency', ascending=False).reset_index(drop=True)
+
+# 2026-08-19：輸出 selection frequency 供 06_joint_search.py 使用。
+#   此表原本只存在於記憶體中，外部檔案 bootstrap_selection_frequency_clean.csv 需人工保存，
+#   容易與本腳本的實際計算分岔。改為直接由本腳本輸出，確保永遠一致（不改變任何計算邏輯）。
+freq_df[['feature', 'selection_frequency', 'selection_count']].to_csv(
+    os.path.join(CSV_DIR, 'bootstrap_selection_frequency_clean.csv'), index=False)
+print(f"  已輸出 selection frequency（{len(freq_df)} 個特徵）")
 
 # ⭐ Get Top 30 features (not 25!)
 top30_features = freq_df.head(30)['feature'].tolist()

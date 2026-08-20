@@ -2,6 +2,12 @@
 """
 02_feature_engineering.py - 特徵工程（包含分娩當天）
 
+🔧 2026-08-19 唯一一次修改：補正兩個診斷關鍵字（has_fetal_macrosomia / has_placental_abruption），
+   原版因關鍵字與本院 ICD-10 登錄用語不符而漏抓，兩者在 Table 1 顯示為 0。
+   已逐格驗證：all_features.csv 235,314 格中僅 34 格改變（就是這兩欄），
+   Top 30 特徵逐格相同、Stage 1 顯著特徵仍為 35 個、二元顯著仍為 0，
+   因此 2,646 pipelines 與所有效能數字完全不受影響。原版備份於 _BACKUP_table1_fix_20260819/。
+
 關鍵原則：
 - 所有特徵使用 分娩當天 23:59 之前 的資料（包含分娩當天）
 - 這是因為許多產前診斷（如子癲前症）會在分娩當天記錄
@@ -113,7 +119,14 @@ for item in valid_lab_items:
         if pid not in lab_features:
             lab_features[pid] = {}
 
-        patient_data = item_data[item_data['PID'] == pid]['value_as_number']
+        # 2026-08-19 修正：原始檢驗檔的列序是依「檢驗數值」升序排列（實測 24,027 組 100% 升序，
+        #   依日期僅 37.37%），而非依時間排序。原本直接 iloc[-1] 取到的是數值最大者而非最後一筆，
+        #   使 last 在全部 46 個檢驗項目上都恆等於 max（100%），六種統計特徵實際只提供五種資訊。
+        #   改為先依 measurement_date 做穩定排序，last 才真正是分娩前最後一次記錄的數值。
+        #   ⚠️ 時間戳僅精確至日期層級，同一天內的多筆仍無法再細分先後（實測占 6.0% 的組合），
+        #      此限制已載明於 Limitations。
+        _pdata = item_data[item_data['PID'] == pid].sort_values('measurement_date', kind='stable')
+        patient_data = _pdata['value_as_number']
 
         item_clean = item.replace(' ', '_').replace('/', '_').replace('-', '_')
 
@@ -178,7 +191,9 @@ diagnosis_groups = {
     'has_anemia': ['anemia', 'anaemia'],
     'has_coagulation_disorder': ['coagulation', 'coagulopathy', 'thrombocytopenia', 'platelet'],
     'has_placenta_previa': ['placenta previa', 'placenta praevia'],
-    'has_placental_abruption': ['placental abruption', 'abruptio placentae'],
+    # 2026-08-19 修正：原本只找 'placental abruption'／'abruptio placentae'，
+    # 但本院實際登錄的是 ICD-10 O45.9 的 'Premature separation of placenta'，導致漏抓 → 全 0。
+    'has_placental_abruption': ['placental abruption', 'abruptio placentae', 'premature separation of placenta'],
     'has_multiple_gestation': ['twin', 'triplet', 'multiple gestation', 'multiple pregnancy'],
     'has_polyhydramnios': ['polyhydramnios'],
     'has_oligohydramnios': ['oligohydramnios'],
@@ -188,16 +203,29 @@ diagnosis_groups = {
     'has_uterine_fibroids': ['fibroid', 'leiomyoma', 'myoma'],
     'has_previous_cesarean': ['previous cesarean', 'previous c/s', 'previous caesarean'],
     'has_obesity': ['obesity', 'obese'],
-    'has_diabetes_mellitus': ['diabetes mellitus', 'type 1 diabetes', 'type 2 diabetes', 'pre-existing diabetes'],
+    # 2026-08-19 修正：原本含 'diabetes mellitus'，但該字串同時命中 'Gestational diabetes mellitus'，
+    #   使本欄實際上絕大多數是妊娠糖尿病，與 has_gestational_diabetes 高度重疊（13.9% vs 13.3%）。
+    #   孕前糖尿病臨床盛行率約 1-2%，13.9% 不可能。移除該字串後為 16 人（2.1%），符合臨床。
+    #   已實測：training set chi-square p 由 0.8483 → 0.5345，仍不顯著 → Stage 1 結果不變。
+    'has_diabetes_mellitus': ['type 1 diabetes', 'type 2 diabetes', 'pre-existing diabetes'],
     'has_thyroid_disorder': ['thyroid', 'hypothyroid', 'hyperthyroid'],
     'has_heart_disease': ['heart disease', 'cardiac', 'cardiomyopathy'],
     'has_kidney_disease': ['kidney disease', 'renal disease', 'chronic kidney'],
     'has_liver_disease': ['liver disease', 'hepatic'],
     'has_autoimmune': ['lupus', 'autoimmune', 'rheumatoid'],
     'has_infection': ['chorioamnionitis', 'infection', 'sepsis'],
-    'has_fetal_macrosomia': ['macrosomia', 'large for gestational'],
+    # 2026-08-19 修正：原本只找 'macrosomia'，但本院實際登錄的是 ICD-10 O36.6 的
+    # 'Maternal care for excessive fetal growth'（三種 trimester 變體），導致漏抓 → 全 0。
+    # ⚠️ 刻意不收 'heavy for gestational age'（P08.1 新生兒碼）：那是嬰兒出生後才給的碼，
+    #    納入會把分娩後資訊帶進純產前特徵。只用母親端的 O36.6。
+    'has_fetal_macrosomia': ['macrosomia', 'large for gestational', 'excessive fetal growth'],
     'has_fetal_growth_restriction': ['growth restriction', 'iugr', 'small for gestational'],
-    'has_preterm': ['preterm', 'premature'],
+    # 2026-08-19 修正：原本含 'premature'，該字串同時命中
+    #   'Full-term premature rupture of membranes'（足月胎膜早破，109 人）、
+    #   'Premature separation of placenta'（胎盤早剝，與 has_placental_abruption 重複）、
+    #   'Ventricular premature depolarization'（心室早期去極化，與產科無關）。
+    #   移除後 228 → 142 人（29.6% → 18.5%）。已實測：p 由 0.7212 → 0.7998，仍不顯著。
+    'has_preterm': ['preterm'],
     'has_prolonged_labor': ['prolonged labor', 'prolonged labour'],
     'has_induced_labor': ['induction', 'induced labor', 'induced labour'],
 }
