@@ -125,6 +125,23 @@ the feature ranking, which is computed on the training set only and loaded once
 (so folds do not re-select features), and the independent test-set evaluation,
 which fits on the full training set of 615 and transforms the 154 test cases.
 
+### The trained model
+
+`final_model_xgboost_top30.json` is the model reported in the manuscript,
+exported in a form that can be evaluated without this codebase: 100 gradient
+boosted trees, the 30 feature names in the order the model expects them, and the
+preprocessing constants (the median used for imputation and the mean and scale
+used for standardisation, one value per feature). A prediction is the logistic
+transform of the summed leaf values plus the base margin, as recorded in the
+file's `note` field.
+
+The file contains model parameters and per-feature aggregates only. It carries no
+patient records, no identifiers and no row-level values, so releasing it does not
+conflict with the restrictions on the underlying data. TRIPOD+AI item 22 asks for
+the model in a form that allows predictions in new individuals and third party
+evaluation; this file is that form, and it is covered by the MIT licence of this
+repository.
+
 ### Not used for the published results
 
 | Script | Why it is kept |
