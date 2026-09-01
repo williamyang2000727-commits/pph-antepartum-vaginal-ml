@@ -2,8 +2,8 @@
 
 Source code accompanying the manuscript:
 
-> **"Machine learning prediction of postpartum hemorrhage from antepartum
-> features alone in vaginal deliveries."**
+> **"Antepartum prediction of postpartum hemorrhage in vaginal deliveries:
+> test ordering outranks coded diagnoses."**
 > Yung-Cheng Yang, Lan-Ying Huang, Yen-Wei Chu.
 > *Submitted to PLOS Digital Health, 2026.*
 
@@ -269,7 +269,7 @@ MIT — see [LICENSE](LICENSE).
 ```bibtex
 @article{Yang2026PPH,
   author  = {Yang, Yung-Cheng and Huang, Lan-Ying and Chu, Yen-Wei},
-  title   = {Machine learning prediction of postpartum hemorrhage from antepartum features alone in vaginal deliveries},
+  title   = {Antepartum prediction of postpartum hemorrhage in vaginal deliveries: test ordering outranks coded diagnoses},
   journal = {Submitted to PLOS Digital Health},
   year    = {2026}
 }
