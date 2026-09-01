@@ -2,8 +2,8 @@
 
 Source code accompanying the manuscript:
 
-> **"An algorithmic risk prediction model for postpartum hemorrhage prior to
-> delivery using antepartum features in vaginal deliveries."**
+> **"Machine learning prediction of postpartum hemorrhage from antepartum
+> features alone in vaginal deliveries."**
 > Yung-Cheng Yang, Lan-Ying Huang, Yen-Wei Chu.
 > *Submitted to PLOS Digital Health, 2026.*
 
@@ -269,7 +269,7 @@ MIT — see [LICENSE](LICENSE).
 ```bibtex
 @article{Yang2026PPH,
   author  = {Yang, Yung-Cheng and Huang, Lan-Ying and Chu, Yen-Wei},
-  title   = {An algorithmic risk prediction model for postpartum hemorrhage prior to delivery using antepartum features in vaginal deliveries},
+  title   = {Machine learning prediction of postpartum hemorrhage from antepartum features alone in vaginal deliveries},
   journal = {Submitted to PLOS Digital Health},
   year    = {2026}
 }
