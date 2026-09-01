@@ -133,7 +133,25 @@ boosted trees, the 30 feature names in the order the model expects them, and the
 preprocessing constants (the median used for imputation and the mean and scale
 used for standardisation, one value per feature). A prediction is the logistic
 transform of the summed leaf values plus the base margin, as recorded in the
-file's `note` field.
+file's `note` field. Node comparisons must be done in float32; in float64 a
+handful of values sit on the wrong side of a split threshold.
+
+**What this file does and does not reproduce.** The trees, the base margin and
+the standardisation constants are exact: supply the held-out test set imputed
+the way the manuscript describes — K-nearest neighbors with k = 7, fitted on the
+training set — and traversing the trees in this file reproduces the published
+confusion matrix cell for cell (TP 29 / FP 39 / FN 8 / TN 78, sensitivity 0.7838,
+area under the curve 0.7404). The imputation step is the exception. K-nearest
+neighbors imputation needs the training set to compute, and that set cannot be
+released, so what ships here instead is the vector of training-set medians. Those
+medians let the model score a new individual with no reference data at all, which
+is the point of releasing it, but they are a substitute rather than the procedure
+the reported metrics came from: scoring the same test set with them gives a
+sensitivity of 0.5946 and an area under the curve of 0.7277. Anyone reproducing
+the manuscript numbers from this file should therefore impute with K-nearest
+neighbors (k = 7) rather than with the shipped constants. The `imputation` field
+inside `preprocessing` records which method the model was trained under, not the
+method the accompanying constants implement.
 
 The file contains model parameters and per-feature aggregates only. It carries no
 patient records, no identifiers and no row-level values, so releasing it does not
