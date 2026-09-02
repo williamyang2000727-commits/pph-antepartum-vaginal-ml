@@ -2,9 +2,7 @@
 
 Source code accompanying the manuscript:
 
-> **"An interpretable joint-search framework for antepartum prediction of
-> postpartum hemorrhage in vaginal deliveries: measurement counts outrank
-> coded diagnoses."**
+> **"An interpretable algorithmic risk prediction model for postpartum hemorrhage prior to delivery using antepartum features in vaginal delivery"**
 > Yung-Cheng Yang, Lan-Ying Huang, Yen-Wei Chu.
 > *Submitted to PLOS Digital Health, 2026.*
 
@@ -270,7 +268,7 @@ MIT — see [LICENSE](LICENSE).
 ```bibtex
 @article{Yang2026PPH,
   author  = {Yang, Yung-Cheng and Huang, Lan-Ying and Chu, Yen-Wei},
-  title   = {An interpretable joint-search framework for antepartum prediction of postpartum hemorrhage in vaginal deliveries: measurement counts outrank coded diagnoses},
+  title   = {An interpretable algorithmic risk prediction model for postpartum hemorrhage prior to delivery using antepartum features in vaginal delivery},
   journal = {Submitted to PLOS Digital Health},
   year    = {2026}
 }
