@@ -10,7 +10,7 @@
 XGBoost（100 棵樹）＋KNN k=7＋StandardScaler＋SMOTEENN＋Top30。
 `submission_config.json` 保存設定、35 個特徵的參考選中次數及投稿指標；參考值來自現行實驗CSV，僅作核對，不參與模型擬合。
 
-測試集154人、37個事件：TP29、FP39、FN8、TN78；sensitivity 0.7838、specificity 0.6667、AUC 0.7404、MCC 0.3876。
+測試集154人、37個事件：TP29、FP39、FN8、TN78；sensitivity 0.7838、specificity 0.6667、AUC 0.7404、MCC 0.3876、composite 0.6123。
 最終配置是以全部2,646個候選的測試集分數選出，該測試集亦用於報告效能，因此存在選擇樂觀偏誤。這不是完全未參與模型選擇的外部驗證。
 同配置的CV AUC為0.6266。這兩個數值不構成真實外部效能的保證上下界。
 
@@ -35,7 +35,7 @@ python 04_train_final_model.py --data-dir /absolute/path/to/02_experiment_csv --
 這會重新執行615/154的分層切分、訓練集單變量篩選、100次bootstrap乘4個C值的L1特徵選擇、KNN7填補、標準化、SMOTEENN與XGBoost，核對全部35個選擇次數及最終指標。`05_final_model_evaluation.py`使用同一實作，不會重新跑舊RandomForest基準。
 
 `--verify`只適用於原研究資料。使用其他符合格式的資料時省略此選項，報告會明確標示未核對投稿值。
-输出包含`reproduction_report.json`、`bootstrap_selection_frequency_clean.csv`與原生`final_model_xgboost_native.json`；不輸出病人識別碼、逐人預測或包含訓練資料的KNN填補器。
+輸出包含`reproduction_report.json`、`bootstrap_selection_frequency_clean.csv`與原生`final_model_xgboost_native.json`；不輸出病人識別碼、逐人預測或包含訓練資料的KNN填補器。
 
 選擇頻率並列時，`--verify`先核對所有35個選中次數，再採已發表的並列次序，使30特徵與已發布模型一致。不符合參考頻率時直接失敗。
 
@@ -76,8 +76,8 @@ CV內填補、標準化與重採樣逐折擬合；兩階段特徵選擇則在完
 
 ## 模型JSON與資料保護
 
-`final_model_xgboost_top30.json`是已發布的自訂樹格式，不是XGBoost原生模型格式。它包括樹、特徵顺序與標準化常數，推論使用`sigmoid(base_margin + sum(leaves))`，節點比較需float32。
-其中`imputation_values`是訓練集的中位數替代值，**不是完整KNN7填補器**。要重現論文指標必須用經授權的訓練資料擬合KNN7；不能拿中位數替代推論的結果聲稱等於論文模型。
+`final_model_xgboost_top30.json`是已發布的自訂樹格式，不是XGBoost原生模型格式。它包括樹、特徵順序與標準化常數，推論使用`sigmoid(base_margin + sum(leaves))`，節點比較需float32。
+其中`imputation_values`是訓練集的中位數替代值，**不是完整KNN7填補器**。只用這些中位數替代值推論，測試集得到TP22、FP36、FN15、TN81，sensitivity 0.5946、AUC 0.7277，不是論文的0.7838與0.7404。要重現論文指標必須用經授權的訓練資料擬合KNN7；不能拿中位數替代推論的結果聲稱等於論文模型。
 
 本倉庫不提供四份醫院原始CSV、`all_features.csv`、病人列資料或識別碼。資料須向通訊作者申請並經機構審查核准。不要將私人資料或訓練填補器推送至公開倉庫。
 目前共用入口重現特徵選擇及最終模型的分類、AUC、Brier與average precision；完整圖表、消融與校準延伸分析仍位於作者分析專案，不宣稱本入口已涵蓋全部論文分析。
