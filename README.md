@@ -1,282 +1,87 @@
-# Antepartum PPH Prediction in Vaginal Deliveries
+# 陰道分娩產後出血預測：投稿實驗程式
 
-Source code accompanying the manuscript:
+對應論文：**An interpretable algorithmic risk prediction model for postpartum hemorrhage prior to delivery using antepartum features in vaginal delivery**
 
-> **"An interpretable algorithmic risk prediction model for postpartum hemorrhage prior to delivery using antepartum features in vaginal delivery"**
-> Yung-Cheng Yang, Lan-Ying Huang, Yen-Wei Chu.
-> *Submitted to PLOS Digital Health, 2026.*
+作者：Yung-Cheng Yang、Lan-Ying Huang、Yen-Wei Chu。PLOS Digital Health 投稿研究，2026。
+資料來自臺中榮民總醫院，IRB CE25412A。
 
-This repository contains the pipeline used to develop and evaluate a
-machine-learning model that predicts postpartum hemorrhage (PPH) risk **before
-delivery**, using **antepartum features only** and restricted to **vaginal
-deliveries**. The model was developed on de-identified electronic health records
-from Taichung Veterans General Hospital, Taiwan (institutional review board
-approval CE25412A).
+## 目前投稿配置
 
-The scripts here are the ones that produced the numbers reported in the
-manuscript; they are provided for methodological transparency and inspection.
-See **Data availability** below — the underlying records cannot be shared, so
-the pipeline cannot be executed end-to-end from this repository alone.
+XGBoost（100 棵樹）＋KNN k=7＋StandardScaler＋SMOTEENN＋Top30。
+`submission_config.json` 保存設定、35 個特徵的參考選中次數及投稿指標；參考值來自現行實驗CSV，僅作核對，不參與模型擬合。
 
-## Final model
+測試集154人、37個事件：TP29、FP39、FN8、TN78；sensitivity 0.7838、specificity 0.6667、AUC 0.7404、MCC 0.3876。
+最終配置是以全部2,646個候選的測試集分數選出，該測試集亦用於報告效能，因此存在選擇樂觀偏誤。這不是完全未參與模型選擇的外部驗證。
+同配置的CV AUC為0.6266。這兩個數值不構成真實外部效能的保證上下界。
 
-| Configuration | Performance on the independent test set (n = 154) |
-|---|---|
-| **XGBoost + SMOTEENN + Top 30 features + KNN k=7 imputation** | Sensitivity **0.7838** / AUC **0.7404** / MCC **0.3876** / Brier **0.2418** |
-| Confusion matrix | TP 29 / FP 39 / FN 8 / TN 78 |
-| Composite score | **0.6123** — ranked **1 / 2,646** unique pipelines |
-
-Composite score = `0.4 × MCC + 0.3 × AUC + 0.3 × sensitivity`, computed on the
-independent test set. The same pipeline ranked **522 / 2,646** (top 19.7%) on the
-cross-validation composite, which played no part in its selection.
-
-Because the final model was selected by its test-set composite score, the
-test-set metrics are an **optimistic bound**, not an unbiased estimate of
-generalization. The manuscript reports this explicitly and quantifies it: the
-winning pipeline's test-minus-cross-validation composite gap is +0.2066 against
-a mean of +0.0033 across all 2,646 pipelines (62.9×, the highest percentile), and
-cross-validation AUC correlates only weakly with test AUC (Spearman
-ρ = 0.276). The conservative lower bound is the cross-validation AUC of 0.6266.
-
-## Data availability
-
-The de-identified electronic health records are **not publicly shared**, because
-of patient privacy regulations and restrictions imposed by the institutional
-review board of Taichung Veterans General Hospital. De-identified data may be
-made available to qualified researchers on reasonable request to the
-corresponding author (ywchu@nchu.edu.tw), subject to additional institutional
-review board approval.
-
-Consequently no data file is included here — neither the four raw hospital
-exports, nor the derived `all_features.csv`, which holds individual-level
-clinical values for all 769 patients.
-
-## Expected directory layout
-
-Scripts `04` through `08` resolve their input and output directories from the
-**parent** of the directory they live in:
-
-```python
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-```
-
-So place them one level below the project root:
-
-```
-project_root/
-├── scripts/                  <- the .py files in this repository
-├── 01_KEY_RESULTS/           <- model artefacts written by 04 and 05
-└── 02_experiment_csv/        <- all_features.csv and joint-search outputs
-```
-
-`01_create_labels.py`, `02_feature_engineering.py` and `03_feature_selection.py`
-instead read and write plain filenames in the **current working directory**, so
-run them from the directory holding the raw exports.
-
-### Input files expected by 01 and 02
-
-The two cohort-building scripts refer to the hospital's export filenames
-verbatim. Rename your own files to match, or edit the `read_csv` calls near the
-top of each script:
-
-| Script | Expects |
-|---|---|
-| `01_create_labels.py` | `1.F2025627_2024產婦基本資料N1239.csv` (maternal baseline), `3.F2025627_疾病診斷(2023-2024).csv` (diagnoses), `16.F2025627_產婦手術術式(2024).csv` (delivery procedures) |
-| `02_feature_engineering.py` | `vaginal_delivery_labels.csv` (written by `01`), `2.F2025627_產科檢驗數值(2023-2024).csv` (laboratory and vital-sign values), `3.F2025627_疾病診斷(2023-2024).csv` |
-
-## Repository contents
-
-### Cohort construction and feature engineering
-
-| Script | Purpose |
-|---|---|
-| `01_create_labels.py` | Derive PPH labels from ICD-10 diagnoses and restrict the cohort to vaginal deliveries (1,239 deliveries, minus 445 cesarean and 25 fetal-demise cases, giving **769**). Writes `vaginal_delivery_labels.csv` |
-| `02_feature_engineering.py` | Six statistical summaries (mean / minimum / maximum / standard deviation / last recorded value / measurement count) for each of 46 laboratory and vital-sign items, plus maternal age, giving 277 continuous features; plus 27 binary features (26 ICD-10 diagnosis flags and one age-derived flag) = **304 candidate features**. Writes `all_features.csv` |
-
-### Canonical model pipeline
-
-| Script | Purpose |
-|---|---|
-| `04_train_RF_SMOTEENN_Top30.py` | **The canonical feature-selection and training script.** Stratified 80/20 split, then train-only chi-square and t-test filtering, train-only Bootstrap LASSO stability selection (100 resamples × 4 regularization parameters = 400 fits), KNN k=1 imputation, standardization, SMOTEENN, RandomForest. Retained because it is the canonical source of the Top 30 feature set and of `bootstrap_selection_frequency_clean.csv`; its own self-check still targets the original RandomForest baseline, which is **not** the final model reported in the manuscript |
-| `06_joint_search.py` | Joint search over 7 × 9 × 7 × 6 = **2,646 unique pipelines** by 10-fold stratified cross-validation (**26,460 fits**) |
-| `07_full_test_eval.py` | Retrain all 2,646 pipelines on the full training set and evaluate each on the independent test set |
-| `05_final_model_evaluation.py` | Retrain the **RandomForest baseline** (Top 30 + SMOTEENN, the configuration this script was written for) and write its confusion matrix, receiver operating characteristic curve, mean-decrease-in-impurity importances and a four-panel summary figure. Kept for provenance; the model reported in the manuscript is extreme gradient boosting, produced by `06`/`07` |
-| `08_test_eval_top10.py` | Cross-check the ten best cross-validation pipelines on the test set |
-
-Inside the cross-validation loop, imputation, standardization and
-class-imbalance resampling are **all fitted separately within each training
-fold** and then applied to that fold's validation data, which is never used to
-estimate any of them. The code is the authority on this: in `06_joint_search.py`
-the imputer and the scaler are constructed inside the `for train_idx, val_idx`
-loop.
-
-> **Corrected on 2026-08-19.** Earlier versions fitted the imputer and the
-> scaler **once on the full training set before the fold split**, so every
-> validation fold contributed to the imputation and scaling parameters. That is
-> cross-validation-level data leakage, it made the cross-validation figures
-> optimistic, and it contradicted the fit-on-train principle this study cites in
-> its own Discussion. The experiment was rerun after the fix and every number in
-> the manuscript comes from the rerun. This README described the pre-fix
-> behaviour until 2026-08-20.
-
-Two things remain outside the loop, by design and stated here for transparency:
-the feature ranking, which is computed on the training set only and loaded once
-(so folds do not re-select features), and the independent test-set evaluation,
-which fits on the full training set of 615 and transforms the 154 test cases.
-
-### The trained model
-
-`final_model_xgboost_top30.json` is the model reported in the manuscript,
-exported in a form that can be evaluated without this codebase: 100 gradient
-boosted trees, the 30 feature names in the order the model expects them, and the
-preprocessing constants (the median used for imputation and the mean and scale
-used for standardisation, one value per feature). A prediction is the logistic
-transform of the summed leaf values plus the base margin, as recorded in the
-file's `note` field. Node comparisons must be done in float32; in float64 a
-handful of values sit on the wrong side of a split threshold.
-
-**What this file does and does not reproduce.** The trees, the base margin and
-the standardisation constants are exact: supply the held-out test set imputed
-the way the manuscript describes — K-nearest neighbors with k = 7, fitted on the
-training set — and traversing the trees in this file reproduces the published
-confusion matrix cell for cell (TP 29 / FP 39 / FN 8 / TN 78, sensitivity 0.7838,
-area under the curve 0.7404). The imputation step is the exception. K-nearest
-neighbors imputation needs the training set to compute, and that set cannot be
-released, so what ships here instead is the vector of training-set medians. Those
-medians let the model score a new individual with no reference data at all, which
-is the point of releasing it, but they are a substitute rather than the procedure
-the reported metrics came from: scoring the same test set with them gives a
-sensitivity of 0.5946 and an area under the curve of 0.7277. Anyone reproducing
-the manuscript numbers from this file should therefore impute with K-nearest
-neighbors (k = 7) rather than with the shipped constants. The `imputation` field
-inside `preprocessing` records which method the model was trained under, not the
-method the accompanying constants implement.
-
-The file contains model parameters and per-feature aggregates only. It carries no
-patient records, no identifiers and no row-level values, so releasing it does not
-conflict with the restrictions on the underlying data. TRIPOD+AI item 22 asks for
-the model in a form that allows predictions in new individuals and third party
-evaluation; this file is that form, and it is covered by the MIT licence of this
-repository.
-
-### Not used for the published results
-
-| Script | Why it is kept |
-|---|---|
-| `03_feature_selection.py` | An earlier stability-selection variant. It applies a fixed 0.6 selection-frequency threshold, stratified bootstrap resampling, `class_weight='balanced'`, `C = [0.01, 0.1, 0.5, 1.0]`, and the whole cohort with no train/test split. **It does not produce the published 30 features.** Those come from `04_train_RF_SMOTEENN_Top30.py`, which uses unstratified resampling, no class weighting, `C = [0.01, 0.1, 1.0, 10.0]`, and the 615 training cases only, then ranks features by selection frequency and takes the top N. Re-running both variants reproduces the published selection counts exactly (35 of 35) for the `04` procedure and not at all (0 of 35) for this one. Retained for provenance; do not use it to reproduce the published feature set |
-
-### Not included
-
-This repository holds the cohort-construction, feature-engineering, model-search
-and evaluation code — that is, everything that produces a reported number. The
-figure and table scripts live in a separate analysis directory and are not
-included here: some only draw schematics or format results into Word tables, and
-the rest cover the bootstrap confidence intervals, the calibration curve, the
-decision curve analysis and the Shapley additive explanations plots. All of them
-are available from the authors on request.
-
-## Reproducibility
-
-Every random state is fixed to `42` — data partitioning, cross-validation,
-bootstrap resampling and class-imbalance routines all use the same seed. Given
-`all_features.csv`, `04_train_RF_SMOTEENN_Top30.py` reproduces the 400-fit
-selection counts exactly. Note that the confusion matrix this script asserts
-against (TP 27 / FP 41 / FN 10 / TN 76, to a tolerance of 0.001) belongs to the
-original RandomForest baseline it was written to reproduce, **not** to the final
-model reported in the manuscript, whose confusion matrix is TP 29 / FP 39 /
-FN 8 / TN 78.
-
-Two caveats worth knowing before re-deriving anything:
-
-1. **Tied selection counts.** Five groups of features share an identical
-   selection count — ranks 3–4 (275), 18–19 (187), 21–22 (180), 30–31 (142) and
-   33–35 (115) — and the default pandas sort is not stable, so regenerating the
-   ranking table from scratch can swap tied features. The Top 8, Top 15, Top 20
-   and Top 25 boundaries fall clear of every tie. The **Top 30 boundary does sit
-   on a tie**: the 30th and 31st features (measurement count of estimated
-   glomerular filtration rate and measurement count of creatinine) are both
-   selected 142 times. This changes nothing, for a structural reason: estimated
-   glomerular filtration rate is derived from creatinine by the MDRD formula, so
-   the two are always ordered together and their measurement counts are identical
-   for all 769 deliveries (Pearson r = 1.000000, maximum absolute difference 0).
-   Substituting one for the other and retraining reproduces the reported metrics
-   and confusion matrix exactly.
-
-2. **The stored ranking table.** Scripts `05` through `08` read a stored
-   selection-frequency table, `bootstrap_selection_frequency_clean.csv`. This is
-   written by `04_train_RF_SMOTEENN_Top30.py`, which computes the ranking and
-   exports it directly, so the file can never drift from the procedure that
-   produced it. Script `03` writes a differently named file from a different
-   variant of the procedure and is not used by the final model.
-
-## Installation
+## 安裝
 
 ```bash
-git clone https://github.com/williamyang2000727-commits/pph-antepartum-vaginal-ml.git
-cd pph-antepartum-vaginal-ml
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-### Running the pipeline
+原研究使用Python 3.13.5。數值重現也受SciPy與BLAS建置影響，版本相同不保證所有最近鄰平手處理一致。`--verify`會在結果不符時失敗，不會更改參考值來通過。
 
-The raw hospital records cannot be shared (see **Data availability**), so the
-pipeline cannot be executed end-to-end from this repository alone. If you supply
-your own data in the same shape, note that the scripts use **two different path
-conventions**, a legacy of the directory they were developed in:
+## 重現目前最終模型
 
-| Stage | Working directory | Reads | Writes |
-|---|---|---|---|
-| `01` `02` `03` | the directory holding the data files | plain filenames in the current directory | plain filenames in the current directory |
-| `04` `05` `06` `07` `08` | anywhere | `<base>/02_experiment_csv/` | `<base>/02_experiment_csv/`, `<base>/01_KEY_RESULTS/`, `<base>/04_logs/` |
+取得經授權的`all_features.csv`後：
 
-`<base>` is resolved by `_resolve_base()`: it walks up from the script looking
-for a directory that contains `02_experiment_csv`, and falls back to the
-script's own directory. So placing your data in
-`pph-antepartum-vaginal-ml/02_experiment_csv/` and running the scripts from the
-repository root works; the output directories are created automatically.
-
-Because of the split convention, `02` writes `all_features.csv` into the working
-directory while `04` reads it from `02_experiment_csv/`. Move or symlink the file
-between those two stages.
-
-> **Corrected on 2026-08-20.** `04` through `08` previously derived `<base>` as
-> "two directories above the script", which is correct only in the original
-> project layout, where the scripts sit in a subdirectory. In this repository the
-> scripts sit at the root, so that expression resolved to the directory
-> *containing* the clone and every one of those five scripts failed on a fresh
-> checkout.
-
-The experiments were run on **Python 3.13.5**. `requirements.txt` pins the
-versions reported in the manuscript for the packages that affect numerical
-results; the plotting and document packages are left unpinned, because they do
-not.
-
-## Comments
-
-Some inline comments and console messages are in Traditional Chinese, from the
-original development. This README and the docstring at the top of each script
-give the authoritative English description of every component.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
-
-## Citation
-
-```bibtex
-@article{Yang2026PPH,
-  author  = {Yang, Yung-Cheng and Huang, Lan-Ying and Chu, Yen-Wei},
-  title   = {An interpretable algorithmic risk prediction model for postpartum hemorrhage prior to delivery using antepartum features in vaginal delivery},
-  journal = {Submitted to PLOS Digital Health},
-  year    = {2026}
-}
+```bash
+python 04_train_final_model.py --data-dir /absolute/path/to/02_experiment_csv --output-dir /absolute/path/to/private-results --verify
 ```
 
-## Contact
+這會重新執行615/154的分層切分、訓練集單變量篩選、100次bootstrap乘4個C值的L1特徵選擇、KNN7填補、標準化、SMOTEENN與XGBoost，核對全部35個選擇次數及最終指標。`05_final_model_evaluation.py`使用同一實作，不會重新跑舊RandomForest基準。
 
-Yung-Cheng Yang — william.yang2000727@gmail.com
-Corresponding author: Yen-Wei Chu — ywchu@nchu.edu.tw
-National Chung Hsing University, Graduate Institute of Genomics and
-Bioinformatics, Taichung, Taiwan
+`--verify`只適用於原研究資料。使用其他符合格式的資料時省略此選項，報告會明確標示未核對投稿值。
+输出包含`reproduction_report.json`、`bootstrap_selection_frequency_clean.csv`與原生`final_model_xgboost_native.json`；不輸出病人識別碼、逐人預測或包含訓練資料的KNN填補器。
+
+選擇頻率並列時，`--verify`先核對所有35個選中次數，再採已發表的並列次序，使30特徵與已發布模型一致。不符合參考頻率時直接失敗。
+
+## 各入口用途
+
+| 檔案 | 用途 |
+|---|---|
+| `01_create_labels.py` | 從醫院原始表建立陰道分娩族群與PPH標籤 |
+| `02_feature_engineering.py` | 46項測量乘6統計量，加年齡與27二元特徵，建立304候選特徵 |
+| `03_feature_selection.py` | 與目前最終模型相同的train-only兩階段選擇，不再使用舊60%門檻版本 |
+| `04_train_final_model.py` | 目前XGBoost＋KNN7完整訓練與指標驗證 |
+| `05_final_model_evaluation.py` | 同一最終模型的重訓評估入口 |
+| `submission_pipeline.py` | 03、04、05共用實作 |
+| `submission_config.json` | 已發表配置與彙總參考數值 |
+| `06_joint_search.py` | 7填補×9演算法×7不平衡×6特徵子集，10-fold CV |
+| `07_full_test_eval.py` | 在完整train重新訓練全部2,646候選，再評估test |
+| `08_test_eval_top10.py` | CV前10候選的補充比較，不負責選出投稿最終模型 |
+
+早期03、RandomForest版04與05保留於Git歷史。現行入口不再執行那些版本。
+
+## 原始資料至搜尋
+
+01、02仍依原始研究的檔名從目前工作目錄讀寫資料；這兩個腳本中的原始CSV檔名是資料介面，請先查看檔案開頭並提供相同結構。所有醫院資料應放在私人位置。
+02產生`all_features.csv`後，放入資料根目錄的`02_experiment_csv/`。
+
+搜尋06、07、08仍從腳本位置向上尋找含`02_experiment_csv/`的資料根目錄。若在本倉庫重跑，請在本倉庫建立該資料目錄，再先執行：
+
+```bash
+python 03_feature_selection.py --data-dir ./02_experiment_csv --output-dir ./02_experiment_csv --verify
+python 06_joint_search.py
+python 07_full_test_eval.py
+```
+
+03輸出的檔名正是06、07所讀的`bootstrap_selection_frequency_clean.csv`。輸出目錄請使用新目錄，或先備份舊產物。
+
+06的CV排序是三個指標百分位排名的平均；07的test排序是`0.4*MCC + 0.3*AUC + 0.3*sensitivity`。以後者公式重算CV時，最終配置排名522；06的百分位排序是另一個數值，不能混用。
+CV內填補、標準化與重採樣逐折擬合；兩階段特徵選擇則在完整train做一次，沒有在各折重做。這是既有實驗設計，應保留其限制。
+
+## 模型JSON與資料保護
+
+`final_model_xgboost_top30.json`是已發布的自訂樹格式，不是XGBoost原生模型格式。它包括樹、特徵顺序與標準化常數，推論使用`sigmoid(base_margin + sum(leaves))`，節點比較需float32。
+其中`imputation_values`是訓練集的中位數替代值，**不是完整KNN7填補器**。要重現論文指標必須用經授權的訓練資料擬合KNN7；不能拿中位數替代推論的結果聲稱等於論文模型。
+
+本倉庫不提供四份醫院原始CSV、`all_features.csv`、病人列資料或識別碼。資料須向通訊作者申請並經機構審查核准。不要將私人資料或訓練填補器推送至公開倉庫。
+目前共用入口重現特徵選擇及最終模型的分類、AUC、Brier與average precision；完整圖表、消融與校準延伸分析仍位於作者分析專案，不宣稱本入口已涵蓋全部論文分析。
+
+## 授權與聯絡
+
+程式採MIT授權，見LICENSE。通訊作者：Yen-Wei Chu（ywchu@nchu.edu.tw）。研究生：Yung-Cheng Yang（william.yang2000727@gmail.com）。

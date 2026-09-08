@@ -1,0 +1,40 @@
+{
+  "validation_date": "2026-09-08",
+  "scope": "重新執行正式特徵選擇與最終模型；未重跑全部2646候選或全部延伸分析",
+  "selection_counts_matched": 35,
+  "published_tree_count_matched": 100,
+  "feature_order_matched": 30,
+  "train_n": 615,
+  "test_n": 154,
+  "test_events": 37,
+  "metrics": {
+    "tp": 29,
+    "fp": 39,
+    "fn": 8,
+    "tn": 78,
+    "sensitivity": 0.7837837837837838,
+    "specificity": 0.6666666666666666,
+    "precision": 0.4264705882352941,
+    "npv": 0.9069767441860465,
+    "f1": 0.5523809523809524,
+    "accuracy": 0.6948051948051948,
+    "auc": 0.7403557403557404,
+    "mcc": 0.3875583841057938,
+    "brier": 0.24177086149222068,
+    "average_precision": 0.4298638353365539,
+    "composite": 0.6122652108841748
+  },
+  "resampled_n": 593,
+  "resampled_events": 380,
+  "environment": {
+    "python": "3.13.5",
+    "numpy": "2.2.5",
+    "pandas": "2.3.3",
+    "scipy": "1.15.3 (Anaconda build)",
+    "scikit-learn": "1.6.1",
+    "imbalanced-learn": "0.13.0",
+    "xgboost": "3.0.5"
+  },
+  "warnings": "原流程的部分L1擬合觸及max_iter；保留原設定且選中次數逐項吻合，未將警告隱藏。",
+  "tests": "test_submission_pipeline.py：錯值、NaN、inf、缺失結果拒絕；已知混淆矩陣和機率指標通過。"
+}

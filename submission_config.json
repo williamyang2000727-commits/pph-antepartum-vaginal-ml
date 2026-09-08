@@ -1,0 +1,178 @@
+{
+  "seed": 42,
+  "test_size": 0.2,
+  "bootstrap_resamples": 100,
+  "bootstrap_fraction": 0.8,
+  "lasso_c": [
+    0.01,
+    0.1,
+    1.0,
+    10.0
+  ],
+  "n_features": 30,
+  "knn_k": 7,
+  "threshold": 0.5,
+  "xgboost": {
+    "n_estimators": 100,
+    "random_state": 42,
+    "eval_metric": "logloss",
+    "verbosity": 0,
+    "n_jobs": 1
+  },
+  "tolerance": 1e-08,
+  "expected_metrics": {
+    "tp": 29,
+    "fp": 39,
+    "fn": 8,
+    "tn": 78,
+    "sensitivity": 0.7837837837837838,
+    "specificity": 0.6666666666666666,
+    "precision": 0.4264705882352941,
+    "f1": 0.5523809523809524,
+    "accuracy": 0.6948051948051948,
+    "auc": 0.7403557403557404,
+    "mcc": 0.3875583841057938
+  },
+  "selection_reference": [
+    {
+      "feature": "Body_height_count",
+      "selection_count": 287
+    },
+    {
+      "feature": "Systolic_blood_pressure_min",
+      "selection_count": 286
+    },
+    {
+      "feature": "Pain_severity_0_10_count",
+      "selection_count": 275
+    },
+    {
+      "feature": "Nucleated_erythrocytes_100_leukocytes_[Ratio]_in_Blood_std",
+      "selection_count": 275
+    },
+    {
+      "feature": "aPTT_in_Platelet_poor_plasma_by_Coagulation_assay_count",
+      "selection_count": 272
+    },
+    {
+      "feature": "Body_weight_min",
+      "selection_count": 264
+    },
+    {
+      "feature": "INR_in_Platelet_poor_plasma_by_Coagulation_assay_std",
+      "selection_count": 260
+    },
+    {
+      "feature": "Urea_nitrogen_[Mass_volume]_in_Serum_or_Plasma_min",
+      "selection_count": 256
+    },
+    {
+      "feature": "D_Ag_[Presence]_on_Red_Blood_Cells_count",
+      "selection_count": 253
+    },
+    {
+      "feature": "Oxygen_saturation_in_Blood_mean",
+      "selection_count": 238
+    },
+    {
+      "feature": "Diastolic_blood_pressure_last",
+      "selection_count": 231
+    },
+    {
+      "feature": "Diastolic_blood_pressure_std",
+      "selection_count": 226
+    },
+    {
+      "feature": "Systolic_blood_pressure_std",
+      "selection_count": 218
+    },
+    {
+      "feature": "Neutrophils_100_leukocytes_in_Blood_std",
+      "selection_count": 216
+    },
+    {
+      "feature": "Eosinophils_100_leukocytes_in_Blood_std",
+      "selection_count": 215
+    },
+    {
+      "feature": "Diastolic_blood_pressure_min",
+      "selection_count": 213
+    },
+    {
+      "feature": "B_Ab_[Titer]_in_Serum_or_Plasma_by_Immediate_spin_count",
+      "selection_count": 211
+    },
+    {
+      "feature": "Oxygen_saturation_in_Blood_min",
+      "selection_count": 187
+    },
+    {
+      "feature": "Prothrombin_time_(PT)_std",
+      "selection_count": 187
+    },
+    {
+      "feature": "Prothrombin_time_(PT)_in_Control_Platelet_poor_plasma_by_Coagulation_assay_count",
+      "selection_count": 186
+    },
+    {
+      "feature": "Alanine_aminotransferase_[Enzymatic_activity_volume]_in_Serum_or_Plasma_by_No_addition_of_P_5'_P_count",
+      "selection_count": 180
+    },
+    {
+      "feature": "Diastolic_blood_pressure_max",
+      "selection_count": 180
+    },
+    {
+      "feature": "Oxygen_saturation_in_Blood_std",
+      "selection_count": 177
+    },
+    {
+      "feature": "Diastolic_blood_pressure_count",
+      "selection_count": 173
+    },
+    {
+      "feature": "Urea_nitrogen_[Mass_volume]_in_Serum_or_Plasma_count",
+      "selection_count": 167
+    },
+    {
+      "feature": "INR_in_Platelet_poor_plasma_by_Coagulation_assay_max",
+      "selection_count": 166
+    },
+    {
+      "feature": "Systolic_blood_pressure_count",
+      "selection_count": 159
+    },
+    {
+      "feature": "INR_in_Platelet_poor_plasma_by_Coagulation_assay_last",
+      "selection_count": 157
+    },
+    {
+      "feature": "Prothrombin_time_(PT)_last",
+      "selection_count": 155
+    },
+    {
+      "feature": "Glomerular_filtration_rate_1.73_sq_M.predicted_[Volume_Rate_Area]_in_Serum,_Plasma_or_Blood_by_Creatinine_based_formula_(MDRD)_count",
+      "selection_count": 142
+    },
+    {
+      "feature": "Creatinine_[Mass_volume]_in_Serum_or_Plasma_count",
+      "selection_count": 142
+    },
+    {
+      "feature": "Prothrombin_time_(PT)_max",
+      "selection_count": 123
+    },
+    {
+      "feature": "INR_in_Platelet_poor_plasma_by_Coagulation_assay_count",
+      "selection_count": 115
+    },
+    {
+      "feature": "Prothrombin_time_(PT)_count",
+      "selection_count": 115
+    },
+    {
+      "feature": "Prothrombin_time_(PT)_mean",
+      "selection_count": 115
+    }
+  ]
+}

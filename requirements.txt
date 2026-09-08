@@ -9,8 +9,10 @@ xgboost==3.0.5
 lightgbm==4.6.0
 shap==0.50.0
 
-# Not pinned: these do not affect the reported metrics.
-scipy
+# SciPy/BLAS can affect nearest-neighbor ties; verify against reference results.
+scipy==1.15.3
+
+# Presentation packages:
 matplotlib
 Pillow
 python-docx
