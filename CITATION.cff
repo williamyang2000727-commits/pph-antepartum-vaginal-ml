@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+title: "pph-antepartum-vaginal-ml"
+type: software
+authors:
+  - given-names: Yung-Cheng
+    family-names: Yang
+    affiliation: "Graduate Institute of Genomics and Bioinformatics, National Chung Hsing University"
+  - given-names: Lan-Ying
+    family-names: Huang
+    affiliation: "Doctor Program in Medical Biotechnology, National Chung Hsing University"
+  - given-names: Chia-Jung
+    family-names: Hsieh
+    affiliation: "Imaging Center for Maternal-Fetal Medicine, Department of Obstetrics and Gynecology, Taichung Veterans General Hospital; Doctoral Program in Translational Medicine, National Chung Hsing University"
+  - given-names: Ya-Fang
+    family-names: Chen
+    affiliation: "Imaging Center for Maternal-Fetal Medicine, Department of Obstetrics and Gynecology, Taichung Veterans General Hospital"
+  - given-names: Jenn-Jhy
+    family-names: Tseng
+    affiliation: "Imaging Center for Maternal-Fetal Medicine, Department of Obstetrics and Gynecology, Taichung Veterans General Hospital; Department of Post-Baccalaureate Medicine, College of Medicine, National Chung Hsing University; Department of Nursing, College of Nursing, Hungkuang University"
+  - given-names: Yen-Wei
+    family-names: Chu
+    affiliation: "Graduate Institute of Genomics and Bioinformatics, National Chung Hsing University"
+version: 1.0.0
+license: MIT
+repository-code: "https://github.com/williamyang2000727-commits/pph-antepartum-vaginal-ml"
+abstract: >-
+  Analysis code and the trained model accompanying the manuscript "An interpretable
+  algorithmic risk prediction model for postpartum hemorrhage prior to delivery using
+  antepartum features in vaginal delivery: a retrospective cohort study", submitted to
+  BMC Medical Informatics and Decision Making (2026).
+keywords:
+  - Postpartum hemorrhage
+  - Vaginal delivery
+  - Antepartum risk prediction
+  - Machine learning
+  - Electronic health records
+  - Informative missingness
+  - Shapley additive explanations
+  - Extreme gradient boosting
+  - Class imbalance
+  - Clinical decision support
