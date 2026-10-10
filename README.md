@@ -4,6 +4,7 @@
 
 作者：Yung-Cheng Yang、Lan-Ying Huang、Chia-Jung Hsieh、Ya-Fang Chen、Jenn-Jhy Tseng、Yen-Wei Chu。投稿 BMC Medical Informatics and Decision Making，2026。
 資料來自臺中榮民總醫院，IRB CE25412A。
+封存版本：v1.0.0，DOI [10.5281/zenodo.23288119](https://doi.org/10.5281/zenodo.23288119)（稿件參考文獻引用此版）；所有版本：[10.5281/zenodo.23288118](https://doi.org/10.5281/zenodo.23288118)。
 
 ## 目前投稿配置
 

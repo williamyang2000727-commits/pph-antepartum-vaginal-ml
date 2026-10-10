@@ -23,6 +23,14 @@ authors:
     affiliation: "Graduate Institute of Genomics and Bioinformatics, National Chung Hsing University"
 version: 1.0.0
 license: MIT
+doi: 10.5281/zenodo.23288119
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.23288119
+    description: "Version 1.0.0, the version cited in the manuscript"
+  - type: doi
+    value: 10.5281/zenodo.23288118
+    description: "All versions (concept DOI)"
 repository-code: "https://github.com/williamyang2000727-commits/pph-antepartum-vaginal-ml"
 abstract: >-
   Analysis code and the trained model accompanying the manuscript "An interpretable
