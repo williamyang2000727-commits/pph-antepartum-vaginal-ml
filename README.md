@@ -1,8 +1,8 @@
 # 陰道分娩產後出血預測：投稿實驗程式
 
-對應論文：**An interpretable algorithmic risk prediction model for postpartum hemorrhage prior to delivery using antepartum features in vaginal delivery**
+對應論文：**An interpretable algorithmic risk prediction model for postpartum hemorrhage prior to delivery using antepartum features in vaginal delivery: a retrospective cohort study**
 
-作者：Yung-Cheng Yang、Lan-Ying Huang、Yen-Wei Chu。PLOS Digital Health 投稿研究，2026。
+作者：Yung-Cheng Yang、Lan-Ying Huang、Yen-Wei Chu。投稿 BMC Medical Informatics and Decision Making，2026。
 資料來自臺中榮民總醫院，IRB CE25412A。
 
 ## 目前投稿配置
